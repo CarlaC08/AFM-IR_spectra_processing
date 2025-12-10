@@ -1,0 +1,19 @@
+[project]
+name = "AFM-IR_spectra_processing"
+description = "Tools to process AFM-IR spectra (from IconIR, NanoIR2 and the IconIR GloveBox) and OPT-IR (from mIRage system)"
+authors = [{ name="COLLANGE Carla", email="carla.collange@universite-paris-saclay.fr" }],
+readme = "README.md"
+license = "MIT"
+keywords = ["AFMIR", "Nanospectroscopy", "QCL breaks", "Infrared Force Volume", "IconIR"]
+requires-python = ">=3.8"
+dependencies = [
+    "streamlit",
+    "plotly",
+    "streamlit-plotly-events",
+    "numpy",
+    "cycler",
+    "scipy",
+    "pandas",
+    "opencv-python",
+    "seaborn",
+    "scikit-learn",]

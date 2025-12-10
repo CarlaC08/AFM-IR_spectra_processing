@@ -1,0 +1,10 @@
+streamlit
+plotly
+streamlit-plotly-events
+numpy
+cycler
+scipy
+pandas
+opencv-python
+seaborn
+scikit-learn
