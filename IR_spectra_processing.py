@@ -421,7 +421,7 @@ with visuTab :
             if st.button('Reset the rows selection'): st.session_state.spectra = st.session_state.spectra_initial.copy()
         test = st.session_state.spectra[st.session_state.spectra.index.duplicated(keep=False)].reset_index()
         if test.shape[0] != 0:
-            duplicated_index = test['index'].unique()
+            duplicated_index = test['Spectrum No'].unique()
             st.session_state.selection = st.session_state.spectra_initial.loc[duplicated_index]
             st.data_editor(st.session_state.selection.reset_index(), disabled=True)
             selected_indices = st.multiselect('Choose the spectra to keep (one/same index)', st.session_state.selection.reset_index().index)
