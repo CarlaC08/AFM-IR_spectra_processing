@@ -26,8 +26,6 @@ import zipfile
 from io import StringIO
 from sklearn.preprocessing import normalize
 import os as os
-from PIL import Image
-from tempfile import NamedTemporaryFile
 from skimage import io
 
 #%% Définitions de variables
