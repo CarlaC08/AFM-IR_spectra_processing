@@ -10,9 +10,7 @@ import streamlit as st
 import plotly.express as px
 from streamlit_plotly_events import plotly_events
 import numpy as np
-from cycler import cycler
 from scipy.signal import savgol_filter
-from scipy import stats
 import pandas as pd
 from copy import deepcopy
 from pathlib import Path
