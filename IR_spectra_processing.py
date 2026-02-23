@@ -457,7 +457,7 @@ with visuTab :
                 xitcks_step = c_e1.number_input("x ticks' step (cm-1)", min_value=1, value=200, key="x_ticks_step")
                 height_spec = c_e2.number_input('Height in pixels of the spectra graph', min_value=10, value=600, key='height_spec')
                 xright = c_e2.number_input('Select the right x boundary', value=np.nanmin(st.session_state.spectra.columns), key='xright')
-                ytop = c_e2.number_input('Select the top y boundary', value=np.nanmax(st.session_state.spectra), step=0.01, key='ytop')
+                ytop = c_e2.number_input('Select the top y boundary', value=np.nanmax(np.ma.masked_where(st.session_state.spectra == np.inf, st.session_state.spectra)), step=0.01, key='ytop')
                 legend_show = c_e2.radio('Show legend', [True, False], index=0, key='legend_show', horizontal=True)
                 if legend_show==True:
                     leg_orient = c_e1.radio('Legend orientation', ['h', 'v'], format_func=lambda x: {'h': "Horizontal",'v': "Vertical"}.get(x), key='leg_orient')
