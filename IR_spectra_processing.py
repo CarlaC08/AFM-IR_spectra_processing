@@ -26,6 +26,9 @@ import zipfile
 from io import StringIO
 from sklearn.preprocessing import normalize
 import os as os
+from PIL import Image
+from tempfile import NamedTemporaryFile
+from skimage import io
 
 #%% Définitions de variables
 
@@ -397,20 +400,22 @@ with visuTab :
                     st.session_state.positions_submit=True         
         with c3 :
             with st.form("Topomap", clear_on_submit=True):
-                topo_file = st.file_uploader("Import the topography", type=['txt','csv','png'])
+                topo_file = st.file_uploader("Import the topography", type=['txt','csv','png','tiff'])
                 submitted = st.form_submit_button("Submit")
                 if submitted and topo_file is not None:
                     if topo_file.name.endswith('.csv'): st.session_state['Topography'] = pd.read_csv(topo_file); st.session_state['Topography_image'] = False
-                    elif topo_file.name.endswith('.png'): st.session_state['Topography'] = cv2.imdecode(np.asarray(bytearray(topo_file.read()), dtype=np.uint8), 1); st.session_state['Topography_image'] = True
+                    elif topo_file.name.endswith('.png') : st.session_state['Topography'] = cv2.imdecode(np.asarray(bytearray(topo_file.read()), dtype=np.uint8), 1); st.session_state['Topography_image'] = True
+                    elif topo_file.name.endswith('.tiff') or topo_file.name.endswith('.tif'): st.session_state['Topography'] = io.imread(topo_file); st.session_state['Topography_image'] = False
                     elif topo_file.name.endswith('.txt'): st.session_state['Topography'] = np.loadtxt(topo_file, delimiter=';'); st.session_state['Topography_image'] = False
                     st.session_state.topo_submit=True
         with c4 :
             with st.form("IRmap", clear_on_submit=True):
-                IR_file = st.file_uploader("Import the IR map", type=['txt','csv','png'])
+                IR_file = st.file_uploader("Import the IR map", type=['txt','csv','png','tiff'])
                 submitted = st.form_submit_button("Submit")
                 if submitted and IR_file is not None:
                     if IR_file.name.endswith('.png'): st.session_state['IR'] = cv2.imdecode(np.asarray(bytearray(IR_file.read()), dtype=np.uint8), 1); st.session_state['IR_image'] = True
                     elif IR_file.name.endswith('.csv'): st.session_state['IR'] = pd.read_csv(IR_file); st.session_state['IR_image'] = False
+                    elif IR_file.name.endswith('.tiff') or IR_file.name.endswith('.tif'): st.session_state['IR'] = io.imread(topo_file); st.session_state['IR_image'] = False
                     elif IR_file.name.endswith('.txt'): st.session_state['IR'] = np.loadtxt(IR_file, delimiter=';'); st.session_state['IR_image'] = False
                     st.session_state.IR_submit=True
         st.write('Size of the map (topography and/or IR) : ',str(st.session_state.map_size[0]),'x',str(st.session_state.map_size[1]),' ',st.session_state.map_unit)
