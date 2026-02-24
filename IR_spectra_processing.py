@@ -257,11 +257,11 @@ System_breaks_predefined = {'Nano2' : [1675,1477,1171], 'IconIR': [1706,1411,120
 
 st.set_page_config(layout='wide')
 st.title('IR spectra processing')
-correctionTab, visuTab = st.tabs(["Laser breaks correction", "Visualisation of IconIR and GloveBox spectra on map"])
+correctionTab, visuTab = st.tabs(["Laser breaks correction", "Visualisation of IconIR spectra on map"])
 
 with correctionTab:
     c1,c2,c3,c4 = st.columns(4)
-    with c1 : system = st.radio('Choose the system', ['GloveBox', 'IconIR', 'Mirage', 'Nano2'], key='system')
+    with c1 : system = st.radio('Choose the system', ['GloveBox', 'IconIR', 'Mirage', 'Nano IR2'], key='system')
     with c2 : divided = st.radio('Spectra are already divided by the background', [True, False], key='divided')
     if system =='Mirage' :
         multiple_file=False
@@ -283,7 +283,7 @@ with correctionTab:
                 with c10 : st.session_state.bkg_files = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'txt'])  
             st.form_submit_button('Submit')
                 
-    elif system =='Nano2' :
+    elif system =='Nano IR2' :
         multiple_file=False
         with  st.form('Nano2_file', clear_on_submit=True) :
             c5,c6 = st.columns(2)
@@ -304,7 +304,7 @@ with correctionTab:
     if (st.session_state.spectra_files==None) or (st.session_state.bkg_files==None) : pass
     else :
         if system == 'GloveBox' or system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_GloveBox(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg, st.session_state.header_bkg = Open_bkg_GloveBox(st.session_state.bkg_files)
-        elif system == 'Nano2': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg, st.session_state.header_bkg = Open_spectrum_nano2(st.session_state.bkg_files)
+        elif system == 'Nano IR2': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg, st.session_state.header_bkg = Open_spectrum_nano2(st.session_state.bkg_files)
         elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = Open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)    
         
         if len(st.session_state.Bkg)>st.session_state.Spec.shape[0] : st.session_state.Bkg = np.array([i for i in st.session_state.Bkg if i[0] in st.session_state.Spec[:,0]])
@@ -328,7 +328,7 @@ with correctionTab:
                 breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1433,1205]).replace(']', '').replace('[', ''), 'Other'])
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
-            elif system == 'Nano2' :
+            elif system == 'Nano IR2' :
                 breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1675,1477,1171]).replace(']', '').replace('[', ''), 'Other'])
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
