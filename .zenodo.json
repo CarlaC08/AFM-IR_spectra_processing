@@ -1,0 +1,18 @@
+{
+  "creators": [
+      {
+        "name": "Collange, Carla",
+        "orcid" : "0009-0000-2635-9351",
+        "affiliation": "Institut de Chimie Physique, Université Paris-Saclay - CNRS, 91400 Orsay, France"
+    }],
+  "collaborators":[
+    {
+        "name": "Rojas, Julien",
+        "orcid": "0000-0002-8389-6126",
+        "affiliation": "Institut de Chimie Physique, Université Paris-Saclay - CNRS, 91400 Orsay, France"
+      }],
+  "title": "Data processing for IR nano-spectroscopy",
+  "license": "mit",
+  "upload_type": "software",
+  "language": "eng"
+}

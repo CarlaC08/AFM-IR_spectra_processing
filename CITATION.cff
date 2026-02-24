@@ -1,0 +1,19 @@
+cff-version: 1.0.0
+message: "If you use this software, please cite it as below."
+authors:
+- affiliation: "Institut de Chimie Physique, Universit\xE9 Paris-Saclay - CNRS, 91400\
+    \ Orsay, France"
+  family-names: COLLANGE
+  given-names: Carla
+  orcid: 0009-0000-2635-9351
+collaborators:
+- family-names: ROJAS
+  given-names: Julien
+  orcid: 0000-0002-8389-6126
+date-released: 2026-02-23
+doi: 10.5281/zenodo.18744084
+license: mit
+repository-code: https://github.com/CarlaC08/AFM-IR_IR_spectra_processing/
+title: "Data processing for IR nano-spectroscopy"
+type: software
+version: 1.0.0
