@@ -565,7 +565,7 @@ with visuTab :
         # Topography map
         if st.session_state.map=='Topography' :
             if st.session_state.Topography_image==True : img = plot_png(st.session_state.Topography, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
-            else : img = plot_txtcsv(st.session_state.Topfography,'YlOrBr_r', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'Height (nm)')
+            else : img = plot_txtcsv(st.session_state.Topography,'YlOrBr_r', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'Height (nm)')
         # IR map
         elif st.session_state.map=='IR' :
             if st.session_state.IR_image==True : img = plot_png(st.session_state.IR, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
