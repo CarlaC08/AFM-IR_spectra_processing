@@ -257,11 +257,12 @@ def get_positions(path):
 @st.dialog("Select a choice to pursue the normalization")
 def normalization_dialog():
     normalization = st.radio('Normalization', ['None', 'Divided by max amplitude', 'Vectorial normalization'], key='norm_choice', label_visibility='collapsed')
-    if normalization == 'Divided by max amplitude' : st.number_input('Enter a wavenumber', min_value = min(st.session_state.spectra.columns), max_value = max(st.session_state.spectra.columns), step=st.session_state.spectra.columns[1]-st.session_state.spectra.columns[0], key='wn_norm')
+    if normalization == 'Divided by max amplitude' : wn_norm_choice = st.number_input('Enter a wavenumber', min_value = min(st.session_state.spectra.columns), max_value = max(st.session_state.spectra.columns), step=st.session_state.spectra.columns[1]-st.session_state.spectra.columns[0], key='wn_norm_choice')
     normalization_nan_choice = st.radio('In case some values are not number (infinite or "None"), choose an option :', ['ignore', 'change', 'stop'], format_func=lambda x: {'ignore':'Ignore the spectra with wrong values', 'change':'Change the invalid value to 0', 'stop' : "Stop the normalization"}.get(x), key='norm_nan_choice')
     if st.button('Select this choice') :
         st.session_state.normalization = normalization
         st.session_state.normalization_nan_choice = normalization_nan_choice
+        if normalization == 'Divided by max amplitude' : st.session_state.wn_norm = wn_norm_choice
         st.rerun()
 
 def normalization_choice(normalization_nan_choice, spectra):
