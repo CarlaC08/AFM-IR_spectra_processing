@@ -50,6 +50,7 @@ if 'fragment_runs' not in st.session_state : st.session_state.fragment_runs=0
 st.session_state.colorscales = [i for j in [[k, k+'_r'] for k in px.colors.named_colorscales()] for i in j]
 symbols_names = [i for i in SymbolValidator().values[2::3] if '-dot' not in i]
 ls_option = ['dash', 'dashdot', 'dot', 'longdash', 'longdashdot', 'solid']
+if 'normalization' not in st.session_state : st.session_state.normalization = 'None'
 
 #%% Fonctions corrections
 
@@ -251,6 +252,24 @@ def get_positions(path):
     positions['color'], positions['marker_style'] = 'blue', 'circle'
     return positions, img_size, img_unit
 
+@st.dialog("Select a choice to pursue the normalization")
+def normalization_dialog():
+    normalization = st.radio('Normalization', ['None', 'Divided by max amplitude', 'Vectorial normalization'], key='norm_choice', label_visibility='collapsed')
+    if normalization == 'Divided by max amplitude' : wn_norm_choice = st.number_input('Enter a wavenumber', min_value = min(st.session_state.spectra.columns), max_value = max(st.session_state.spectra.columns), step=st.session_state.spectra.columns[1]-st.session_state.spectra.columns[0], key='wn_norm_choice')
+    normalization_nan_choice = st.radio('In case some values are not number (infinite or "None"), choose an option :', ['ignore', 'change', 'stop'], format_func=lambda x: {'ignore':'Ignore the spectra with wrong values', 'change':'Change the invalid value to 0', 'stop' : "Stop the normalization"}.get(x), key='norm_nan_choice')
+    if st.button('Select this choice') :
+        st.session_state.normalization = normalization
+        st.session_state.normalization_nan_choice = normalization_nan_choice
+        if normalization == 'Divided by max amplitude' : st.session_state.wn_norm = wn_norm_choice
+        st.rerun()
+
+def normalization_choice(normalization_nan_choice, spectra):
+    if normalization_nan_choice == 'ignore' : st.session_state.spectra_choice = spectra.drop(spectra[spectra.isnull().any(axis=1)].index)
+    elif normalization_nan_choice == 'change' :
+        st.session_state.spectra_choice = spectra.copy()
+        st.session_state.spectra_choice[np.isinf(st.session_state.spectra_choice)] = 0; st.session_state.spectra_choice[np.isnan(st.session_state.spectra_choice)] = 0
+    elif normalization_nan_choice == 'stop' : st.session_state.spectra_choice = 'stop'
+
 System_breaks_predefined = {'Nano2' : [1675,1477,1171], 'IconIR': [1706,1411,1209], 'Nano1' : [1712,1420,1100], 'Nano2S' : [1712,1420,1100], 'Mirage' : [1433,1205], 'GloveBox' : [1389,989]}
 
 #%% Application
@@ -429,6 +448,7 @@ with visuTab :
         try : st.session_state.positions=st.session_state.positions.loc[st.session_state.spectra.index.values]
         except KeyError : st.error("Your positions doesn't seems to match with the spectra. Re-upload the matching measurement file."); st.stop()
         else : st.session_state.positions=st.session_state.positions.loc[st.session_state.spectra.index.values]
+        
         # Plots parameters and spectra operation
         with st.sidebar :
             with st.popover('See all the different colorscales'): st.write(px.colors.sequential.swatches_continuous()); st.write(px.colors.diverging.swatches_continuous())
@@ -530,10 +550,8 @@ with visuTab :
                             selected = st.session_state.positions.index
                             st.session_state.colors = st.session_state.positions['color'].loc[selected].values
                             st.session_state.to_plot = selected
-
             with st.expander('Operations on spectra'):
-                st.write('Normalization'); st.radio('Normalization', ['None', 'Divided by max amplitude', 'Vectorial normalization'], key='normalization', label_visibility='collapsed')
-                if st.session_state.normalization == 'Divided by max amplitude' : wn_norm = st.number_input('Enter a wavenumber', min_value = min(st.session_state.spectra.columns), max_value = max(st.session_state.spectra.columns), step=st.session_state.spectra.columns[1]-st.session_state.spectra.columns[0], key='wn_norm')
+                st.button('Normalization', on_click=normalization_dialog)
                 st.divider()
                 st.toggle('Savitsky-Golay filter', key='savgol_operation')
                 if st.session_state.savgol_operation : st.session_state.win_len = st.number_input('Window length', min_value=3, step=2, value=11); st.session_state.polyorder = st.number_input('Polynome order', min_value=1, step=1, value=2); st.session_state.deriv = st.number_input('Derivation order', min_value=0, step=1)
@@ -547,7 +565,7 @@ with visuTab :
         # Topography map
         if st.session_state.map=='Topography' :
             if st.session_state.Topography_image==True : img = plot_png(st.session_state.Topography, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
-            else : img = plot_txtcsv(st.session_state.Topography,'YlOrBr_r', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'Height (nm)')
+            else : img = plot_txtcsv(st.session_state.Topfography,'YlOrBr_r', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'Height (nm)')
         # IR map
         elif st.session_state.map=='IR' :
             if st.session_state.IR_image==True : img = plot_png(st.session_state.IR, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
@@ -592,8 +610,15 @@ with visuTab :
                 st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
             # Vectorial normalization
             elif st.session_state.normalization == 'Vectorial normalization' :
-                st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra, norm='l2', axis=1), index = st.session_state.spectra.index, columns=st.session_state.spectra.columns)
-                st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
+                if (np.isnan(st.session_state.spectra).sum().sum()>0) or (np.isinf(st.session_state.spectra).sum().sum()>0) :
+                    spectra_choice = normalization_choice(st.session_state.normalization_nan_choice, st.session_state.spectra.copy())
+                    if type(st.session_state.spectra_choice)==str : pass
+                    else :
+                        st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra_choice, norm='l2', axis=1), index = st.session_state.spectra_choice.index, columns=st.session_state.spectra_choice.columns)
+                        st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.spectra_norm.index.intersection(st.session_state.to_plot)].T
+                else :
+                    st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra, norm='l2', axis=1), index = st.session_state.spectra.index, columns=st.session_state.spectra.columns)
+                    st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
             # No normalization
             else : st.session_state.df_toplot=st.session_state.spectra.loc[st.session_state.to_plot].T
             # Mean of the selected spectra
