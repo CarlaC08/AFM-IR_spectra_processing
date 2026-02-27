@@ -402,6 +402,7 @@ with visuTab :
                     st.session_state.spectra_initial.index.names = ['Spectrum No']
                     st.session_state.spectra = st.session_state.spectra_initial.copy()  
                     st.session_state.to_plot=np.array([]); st.session_state.spectra_submit=True
+                    st.session_state.wavenumber = st.session_state.spectra.columns.values
         with c2:
             with st.form("Positions", clear_on_submit=True):
                 positions_files = st.file_uploader("Import all measurements files", accept_multiple_files=True, type='xml', help="Upload the measurements files corresponding to your spectra. They can be found in the different subfolder of the folder 'IRMeasurement', under the name '[subfolder-name].Measurement.xml'")
@@ -481,9 +482,9 @@ with visuTab :
                 st.multiselect('Choose the linestyle(s) to use', ls_option, 'solid', key='line_styles_option')
                 st.subheader('Axis parameters')
                 c_e1, c_e2  = st.columns(2)
-                xleft = c_e1.number_input('Left x axis boundary (cm-1)', value=np.nanmax(st.session_state.spectra.columns), key='xleft')
+                xleft = c_e1.number_input('Left x axis boundary (cm-1)', value=np.nanmax(st.session_state.wavenumber), key='xleft')
                 ybottom = c_e1.number_input('Bottom y axis boundary', value=0., step=0.01, key='ybottom')
-                xright = c_e2.number_input('Right x axis boundary (cm-1)', value=np.nanmin(st.session_state.spectra.columns), key='xright')
+                xright = c_e2.number_input('Right x axis boundary (cm-1)', value=np.nanmin(st.session_state.wavenumber), key='xright')
                 ytop = c_e2.number_input('Top y axis boundary', value=np.nanmax(np.ma.masked_where(st.session_state.spectra == np.inf, st.session_state.spectra)), step=0.01, key='ytop')
                 xitcks_step = st.number_input("x ticks' step (cm-1)", min_value=1, value=100, key="x_ticks_step")
                 offset = st.number_input('x offset between each spectrum', min_value=0., value=0., key='offset',step=1.,format="%.2f")
@@ -563,7 +564,7 @@ with visuTab :
                 mean = st.toggle('Mean of selected spectrum'); st.divider()
                 st.toggle('Ratio analysis', key='ratio_analysis')
                 if st.session_state.ratio_analysis :
-                    ratio_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, key='ratio_cmap'); st.number_input('Wavenumber 1 (cm-1)', min_value=np.nanmin(st.session_state.spectra.columns), max_value=np.nanmax(st.session_state.spectra.columns), key='wn_1'); st.number_input('Wavenumber 2 (cm-1)', min_value=np.nanmin(st.session_state.spectra.columns), max_value=np.nanmax(st.session_state.spectra.columns), key='wn_2')
+                    ratio_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, key='ratio_cmap'); st.number_input('Wavenumber 1 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_1'); st.number_input('Wavenumber 2 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_2')
                     with st.popover('Select spectra for the ratio') : select_ratio = st.multiselect('Select spectra for the ratio', [int(i) for i in st.session_state.positions.index], default=[int(i) for i in st.session_state.positions.index])
         ########################################
         # Topography map
