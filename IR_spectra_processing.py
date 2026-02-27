@@ -24,6 +24,7 @@ import zipfile
 from io import StringIO
 from sklearn.preprocessing import normalize
 import os as os
+import kaleido
 
 #%% Définitions de variables
 
@@ -494,7 +495,7 @@ with visuTab :
                     leg_orient = c_e3.radio('Legend orientation', ['h', 'v'], format_func=lambda x: {'h': "Horizontal",'v': "Vertical"}.get(x), key='leg_orient')
                     if leg_orient=='h': c_e4.number_input('Legend position in y', value=-0.10, key='y_leg', help="The position is set considering the top of the legend box.")
             with st.expander('Spectra selection'):
-                st.radio('Select spectra by :', ['Range', 'Multiselection', 'Selection on map', 'All'], key='selection_tool')
+                st.radio('Select spectra by :', ['Range', 'Multiselection', 'Selection on map', 'All'], key='selection_tool', help="The 'Selection on map' tool is an interactive tool, it will slow the application so use it only if necessary.")
                 # Range selection
                 if st.session_state.selection_tool=='Range' :                    
                     df_range = pd.DataFrame({'Range' : 1, 'StartSpec' : 0, 'EndSpec' : 1}, index=[1]).set_index('Range')
