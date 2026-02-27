@@ -207,7 +207,7 @@ def plot_txtcsv(image, color, map_size, map_unit, map_max, map_min, height_px, w
 
 def color_selected_points(selected):
     st.session_state.tempo_df = pd.DataFrame([np.array([1]*len(selected)), sns.color_palette(st.session_state.choose_cmap, n_colors=len(selected)).as_hex()], index=['value', 'colors']).T
-    st.bar_chart(st.session_state.tempo_df, y=['value'], color='colors', use_container_width=True, height=75, y_label=None)
+    st.bar_chart(st.session_state.tempo_df, y=['value'], color='colors', width='stretch', height=75, y_label=None)
 
 def color_change() :
     if st.session_state.choose_cmap[0] == '#' : st.session_state.colors = [st.session_state.choose_cmap]
@@ -457,10 +457,10 @@ with visuTab :
             if (st.session_state.IR_submit==True) and (st.session_state.topo_submit==False) : default_image='IR'
             elif st.session_state.topo_submit==True : default_image='Topography'
             st.select_slider("Map to use:", ["Topography", "IR"], key='map', value = default_image)
-            with st.expander('Map aspect'):
+            with st.expander('Topo and IR map parameters'):
                 c_w, c_h = st.columns(2, vertical_alignment='bottom')
-                with c_w : width_px = st.number_input('Width in pixels of the map', min_value=10, value=800, key='width_px')
-                with c_h : height_px = st.number_input('Height in pixels of the map', min_value=10, value=800, key='height_px')
+                width_px = c_w.number_input('Width in pixels of the map', min_value=10, value=600, key='width_px')
+                height_px = c_h.number_input('Height in pixels of the map', min_value=10, value=600, key='height_px')
                 if st.session_state[st.session_state.map+'_image']==False:
                     with c_w : map_max = st.number_input('Upper limit of the colorbar', value=np.nanmax(st.session_state[st.session_state.map]), key='map_max')
                     with c_h : map_min = st.number_input('Lower limit of the colorbar', value=np.nanmin(st.session_state[st.session_state.map]), key='map_min')
@@ -468,29 +468,31 @@ with visuTab :
                 st.number_input('Marker size', min_value=1, value=8, step=1, key='marker_size')
                 st.multiselect('Choose the markestyle(s) to use', symbols_names, key='marker_select', default='circle')
                 for i in range(len(st.session_state.marker_select)): st.session_state.positions['marker_style'].iloc[i::len(st.session_state.marker_select)]=st.session_state.marker_select[i]
-            with st.expander('Plot and line(s) aspect'):
-                c_e1, c_e2  = st.columns(2)
-                width_spec = c_e1.number_input('Width in pixels of the spectra graph', min_value=10, value=800, key='width_spec')
-                xleft = c_e1.number_input('Select the left x boundary', value=np.nanmax(st.session_state.spectra.columns), key='xleft')
-                ybottom = c_e1.number_input('Select the bottom y boundary', value=0., step=0.01, key='ybottom')
-                xitcks_step = c_e1.number_input("x ticks' step (cm-1)", min_value=1, value=200, key="x_ticks_step")
-                height_spec = c_e2.number_input('Height in pixels of the spectra graph', min_value=10, value=600, key='height_spec')
-                xright = c_e2.number_input('Select the right x boundary', value=np.nanmin(st.session_state.spectra.columns), key='xright')
-                ytop = c_e2.number_input('Select the top y boundary', value=np.nanmax(np.ma.masked_where(st.session_state.spectra == np.inf, st.session_state.spectra)), step=0.01, key='ytop')
-                legend_show = c_e2.radio('Show legend', [True, False], index=0, key='legend_show', horizontal=True)
-                if legend_show==True:
-                    leg_orient = c_e1.radio('Legend orientation', ['h', 'v'], format_func=lambda x: {'h': "Horizontal",'v': "Vertical"}.get(x), key='leg_orient')
-                    if leg_orient=='h': c_e2.number_input('Legend position in y', value=-0.75, key='y_leg')         
-                offset = st.number_input('Offset between each spectrum', min_value=0., value=0., key='offset',step=1.,format="%.2f")
-                c_color1, c_color2 = st.columns(2)
-                with c_color1 :
-                    bkg_color = st.color_picker('Background plot color', value='#FFFFFF', key = 'bkg_color')
-                    grid_color = st.color_picker('Grid line color', value='#9E9E9E', key = 'grid_color')
-                with c_color2 :
-                    font_color = st.color_picker('Font color', value='#000000', key = 'font_color')
-                    color_container = st.container()
+            with st.expander('Spectra plot parameters'):
+                st.subheader("Graphics parameters")
+                c_s1, c_s2  = st.columns(2)
+                width_spec = c_s1.number_input('Width in pixels', min_value=10, value=800, key='width_spec')
+                height_spec = c_s2.number_input('Height in pixels', min_value=10, value=600, key='height_spec')
+                bkg_color = c_s1.color_picker('Background plot color', value='#FFFFFF', key = 'bkg_color')
+                grid_color = c_s1.color_picker('Grid line color', value='#9E9E9E', key = 'grid_color')
+                font_color = c_s2.color_picker('Font color', value='#000000', key = 'font_color')
+                color_container = c_s2.container()
                 st.multiselect('Choose the linestyle(s) to use', ls_option, 'solid', key='line_styles_option')
-                st.toggle('Add the marker of the corresponding positions in the legend.', key='marker_appear')          
+                st.subheader('Axis parameters')
+                c_e1, c_e2  = st.columns(2)
+                xleft = c_e1.number_input('Left x axis boundary (cm-1)', value=np.nanmax(st.session_state.spectra.columns), key='xleft')
+                ybottom = c_e1.number_input('Bottom y axis boundary', value=0., step=0.01, key='ybottom')
+                xright = c_e2.number_input('Right x axis boundary (cm-1)', value=np.nanmin(st.session_state.spectra.columns), key='xright')
+                ytop = c_e2.number_input('Top y axis boundary', value=np.nanmax(np.ma.masked_where(st.session_state.spectra == np.inf, st.session_state.spectra)), step=0.01, key='ytop')
+                xitcks_step = st.number_input("x ticks' step (cm-1)", min_value=1, value=100, key="x_ticks_step")
+                offset = st.number_input('x offset between each spectrum', min_value=0., value=0., key='offset',step=1.,format="%.2f")
+                st.subheader('Legend parameters')
+                c_e3, c_e4  = st.columns(2)
+                legend_show = c_e3.radio('Show legend', [True, False], index=0, key='legend_show', horizontal=True)
+                c_e4.toggle('Add the marker style', key='marker_appear', help='By activating this toggle, the marker corresponding to the positions of the spectra on the map, will appear in the legend of the spectra plot.')          
+                if legend_show==True:
+                    leg_orient = c_e3.radio('Legend orientation', ['h', 'v'], format_func=lambda x: {'h': "Horizontal",'v': "Vertical"}.get(x), key='leg_orient')
+                    if leg_orient=='h': c_e4.number_input('Legend position in y', value=-0.10, key='y_leg', help="The position is set considering the top of the legend box.")
             with st.expander('Spectra selection'):
                 st.radio('Select spectra by :', ['Range', 'Multiselection', 'Selection on map', 'All'], key='selection_tool')
                 # Range selection
@@ -588,7 +590,7 @@ with visuTab :
             dots = img.add_scatter(x=st.session_state.positions['X'], y=st.session_state.positions['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.positions['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, marker_symbol=st.session_state.positions['marker_style'], name='positions')
             dots.update_layout(hovermode='closest')
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
-            else : st.plotly_chart(dots, use_container_width=False)       
+            else : st.plotly_chart(dots, width='content')       
         
         # Spectra selection on map
         if st.session_state.selection_tool=='Selection on map' :
@@ -648,7 +650,7 @@ with visuTab :
                 ###########################
                 spectra = px.line(st.session_state.df_final, color_discrete_sequence = st.session_state.colors, height=st.session_state.height_spec, width=st.session_state.width_spec, markers=mark_app)
                 if st.session_state.legend_show == True :
-                    if st.session_state.leg_orient=='h' : spectra.update_layout(legend=dict(title=None, xanchor="left", yanchor="bottom", itemsizing=leg_itm_size, orientation='h', y=st.session_state.y_leg, x=0, indentation=0, entrywidth=35))
+                    if st.session_state.leg_orient=='h' : spectra.update_layout(legend=dict(title=None, xanchor="left", yanchor="top", itemsizing=leg_itm_size, orientation='h', y=st.session_state.y_leg, x=0, indentation=0, entrywidth=35))
                     else : spectra.update_layout(legend=dict(title=None, yanchor="top", itemsizing=leg_itm_size, orientation='v', indentation=0, entrywidth=35))
                 else : spectra.update_layout(showlegend=False)
                 spectra.update_traces(marker=dict(size=0.1))
@@ -657,7 +659,7 @@ with visuTab :
             spectra.update_layout(template=None, margin= {'l': 70,'r': 1, 't': 0}, xaxis_title='Wavenumber [cm-1]',yaxis_title='Amplitude [a.u.]', paper_bgcolor=st.session_state.bkg_color, plot_bgcolor=st.session_state.bkg_color, font_color=st.session_state.font_color,yaxis_gridcolor=st.session_state.grid_color, xaxis_gridcolor=st.session_state.grid_color, yaxis_zerolinecolor=st.session_state.grid_color, height=st.session_state.height_spec, width=st.session_state.width_spec)
             spectra.update_xaxes(dtick=st.session_state.x_ticks_step, range=[xleft, xright], ticks='outside', title_standoff = 0, gridcolor=st.session_state.grid_color, tickcolor=st.session_state.grid_color, zeroline=True, zerolinecolor=st.session_state.grid_color); spectra.update_yaxes(range=[ybottom, ytop], gridcolor=st.session_state.grid_color, ticks='outside', tickcolor=st.session_state.grid_color)
             # Plot the spectra
-            st.plotly_chart(spectra, use_container_width=False)
+            st.plotly_chart(spectra, width='content')
                         
             with st.container() :
                 savepath = st.text_input('Enter the file path :')
