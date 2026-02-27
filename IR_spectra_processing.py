@@ -311,7 +311,7 @@ with correctionTab:
             st.form_submit_button('Submit')
 
     else :
-        with c3 : extension = st.radio('Select the extension typeof the SPECTRA files', ['series', 'txt/csv']).split('/')
+        with c3 : extension = st.radio('Select the extension type of the SPECTRA files', ['series', 'txt/csv']).split('/')
         if extension==['series']: multiple_file=True
         else : multiple_file=False
         with  st.form('IconIR_file', clear_on_submit=True) :
@@ -380,6 +380,7 @@ with correctionTab:
 
 with visuTab :
     with st.expander('Upload necessary files', expanded=True):
+        st.write("For the code to be able to work successfully, you need to upload the measurment files and the topo/IR map that corresponds to the spectra you want to study. You can import only ONE topography and/or IR map.")
         c1,c2 = st.columns(2) ; c3,c4 = st.columns(2)
         with c1:
             with st.form("Spectra", clear_on_submit=True):
@@ -414,7 +415,7 @@ with visuTab :
                     st.session_state.positions_submit=True         
         with c3 :
             with st.form("Topomap", clear_on_submit=True):
-                topo_file = st.file_uploader("Import the topography", type=['txt','csv','png'])
+                topo_file = st.file_uploader("Import the topography", type=['txt','csv','png'], help='You may find a .png file in the same folder you have found the measurment file.')
                 submitted = st.form_submit_button("Submit")
                 if submitted and topo_file is not None:
                     if topo_file.name.endswith('.csv'): st.session_state['Topography'] = pd.read_csv(topo_file); st.session_state['Topography_image'] = False
