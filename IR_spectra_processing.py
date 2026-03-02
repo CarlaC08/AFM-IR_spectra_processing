@@ -52,7 +52,28 @@ st.session_state.colorscales = [i for j in [[k, k+'_r'] for k in px.colors.named
 symbols_names = [i for i in SymbolValidator().values[2::3] if '-dot' not in i]
 ls_option = ['dash', 'dashdot', 'dot', 'longdash', 'longdashdot', 'solid']
 if 'normalization' not in st.session_state : st.session_state.normalization = 'None'
-
+if 'arrow_color' not in st.session_state : st.session_state.arrow_color = "#FFFFFF"
+if 'arrow_head' not in st.session_state : st.session_state.arrow_head = 1
+if 'arrow_side' not in st.session_state : st.session_state.arrow_side = "end"
+if 'arrow_size' not in st.session_state : st.session_state.arrow_size = 1.0
+if 'arrow_width' not in st.session_state : st.session_state.arrow_width = 1.5
+if 'bg_color' not in st.session_state : st.session_state.bg_color = None
+if 'border_color' not in st.session_state : st.session_state.border_color = None
+if 'border_pad' not in st.session_state : st.session_state.border_pad = 1.0
+if 'border_width' not in st.session_state : st.session_state.border_width = 1.0 
+if 'box_height' not in st.session_state : st.session_state.box_height = None
+if 'box_width' not in st.session_state : st.session_state.box_width = None
+if 'textfont_color' not in st.session_state : st.session_state.textfont_color = "#000000"
+if 'font_family' not in st.session_state : st.session_state.font_family = "Arial"
+if 'font_size' not in st.session_state : st.session_state.font_size = 10.0
+if 'font_style' not in st.session_state : st.session_state.font_style = "normal"
+if 'font_textcase' not in st.session_state : st.session_state.font_textcase = "normal"
+if 'font_variant' not in st.session_state : st.session_state.font_variant = "normal"
+if 'text_angle' not in st.session_state : st.session_state.text_angle = 0
+if 'vertical_alignement' not in st.session_state : st.session_state.vertical_alignement = "middle"
+if 'horizontal_alignement' not in st.session_state : st.session_state.horizontal_alignement = "center"
+if 'abled_bgColor' not in st.session_state : st.session_state.abled_bgColor = False
+if 'abled_BorderColor' not in st.session_state : st.session_state.abled_BorderColor = False
 #%% Fonctions corrections
 
 def find_nearest(array, value):
@@ -219,6 +240,76 @@ def color_change() :
 def no_color_change() :
     st.session_state.colors = st.session_state.positions['color'].loc[selected].values
     st.session_state.to_plot = selected
+
+@st.dialog('Annotations parameters', width="large", dismissible=False)
+def annotations_parameters():
+    st.badge('New feature !!!', color='red')
+    st.write("You can show or hide the annotations directly by clicking on the data point.")
+    c_param,c_fig = st.columns(2)
+    with c_param.expander('Arrow parameters') :
+        c1,c2 = st.columns(2)
+        arrow_head = c1.number_input("Type of the head", min_value=0, max_value=8, value=st.session_state.arrow_head, key='arrow_head_widget')
+        arrow_side = c1.selectbox("Side of the head", ["end", "start", "end+start", "none"], index=0, key='arrow_side_widget')
+        arrow_size = c2.number_input("Size of the head", min_value=0.3, value=st.session_state.arrow_size, key='arrow_size_widget')
+        arrow_width = c2.number_input("Width (in pixel) of the arrow", min_value=0.1, value=st.session_state.arrow_width, key='arrow_width_widget')
+        arrow_color = st.color_picker("Color", value=st.session_state.arrow_color, key="arrow_color_widget")
+    with c_param.expander('Parameters of the box') :
+        c3, c4 = st.columns(2)
+        abled_bgColor = c3.checkbox('Add a colored background', value=st.session_state.abled_bgColor)
+        bg_color_temp = c3.color_picker('Color of the background', value = st.session_state.bg_color, key='bg_color_widget', disabled=(abled_bgColor is False))
+        abled_BorderColor = c4.checkbox('Add a colored border', value=st.session_state.abled_BorderColor)
+        border_color_temp = c4.color_picker('Color of the border', value = st.session_state.border_color, key='border_color_widget', disabled=(abled_BorderColor is False))
+        bg_color = (None if abled_bgColor is False else bg_color_temp)
+        border_color = (None if abled_BorderColor is False else border_color_temp)
+        border_pad = c3.number_input("Space between text and border", min_value=0.0, value=st.session_state.border_pad, key='border_pad_widget')
+        border_width = c4.number_input("Width (in pixel) of the border", min_value=0.0, value=st.session_state.border_width, key='border_width_widget')
+        box_height = c3.number_input('Height of the text box (when None, height is set automatically)', min_value=1.0, value=None, key='box_height_widget')
+        box_width = c4.number_input('Width of the text box (when None, width is set automatically)', min_value=1.0, value=None, key='box_width_widget')
+    with c_param.expander('Text parameters') :
+        c5, c6 = st.columns(2)
+        font_family = c5.selectbox('Family', ["Arial", "Courier New", "Times New Roman"], index=0, key="font_family_widget")
+        font_size = c6.number_input("Size", min_value=1.0, value=st.session_state.font_size, key="font_size_widget")
+        font_style = c5.selectbox('Style', ["normal", "italic"], index=0, key='font_style_widget')
+        font_textcase = c6.selectbox('Text case', ["normal", "word caps", "upper", "lower"], index=0, key='font_textcase_widget')
+        font_variant = c5.selectbox('Variant', ["normal", "small-caps", "all-small-caps", "all-petite-caps", "petite-caps", "unicase"], index=0, key='font_variant_widget')
+        text_angle = c6.number_input('Angle of text respect to the horizontal',min_value=-360, max_value=360, value=st.session_state.text_angle, key='text_angle_widget')
+        vertical_alignement = c5.selectbox('Vertical alignment of the text', ["top", "middle", "bottom"], index=1, key='vertical_alignement_widget')
+        horizontal_alignement = c6.selectbox('Horizontal alignment of the text', ["left", "center", "right"], index=1, key='horizontal_alignement_widget')
+        textfont_color = c5.color_picker('Color', '#000000', key='textfont_color_widget')
+
+        if st.session_state.map=='Topography' :
+            if st.session_state.Topography_image==True : fig = plot_png(st.session_state.Topography, st.session_state.map_size, st.session_state.map_unit, 400, 400, st.session_state.origin)
+            else : fig = plot_txtcsv(st.session_state.Topography,'YlOrBr_r', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'Height (nm)')
+        elif st.session_state.map=='IR' :
+            if st.session_state.IR_image==True : fig = plot_png(st.session_state.IR, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
+            else : fig = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')
+        fig.update_layout(title="Previsualisation of the annotations (here the figure is 400x400 pixels)")
+        fig.add_scatter(x=[0], y=[0])
+        fig.add_annotation(x=0,y=0,text='Spectra n°XX')
+        fig.update_annotations(align=horizontal_alignement, arrowcolor=arrow_color, arrowhead = arrow_head,
+                                        arrowside = arrow_side,
+                                        arrowsize = arrow_size,
+                                        arrowwidth = arrow_width,
+                                        bgcolor = bg_color,
+                                        bordercolor = border_color,
+                                        borderpad = border_pad,
+                                        borderwidth = border_width,
+                                        height = box_height,
+                                        width = box_width,
+                                        font_color = textfont_color,
+                                        font_family = font_family,
+                                        font_size = font_size,
+                                        font_style = font_style,
+                                        font_textcase = font_textcase,
+                                        font_variant = font_variant,
+                                        textangle  = text_angle,
+                                        valign = vertical_alignement,
+                                        standoff = 2,
+                                        clicktoshow="onoff")
+        c_fig.plotly_chart(fig)
+    if st.button('Change parameters', type='primary') :
+        for i in ['arrow_color','arrow_head', 'arrow_side', 'arrow_size','arrow_width','bg_color','border_color','border_pad','border_width','box_height','box_width','textfont_color','font_family','font_size','font_style','font_textcase','font_variant','text_angle','vertical_alignement', 'horizontal_alignement','abled_bgColor','abled_BorderColor'] : st.session_state[i] = vars()[i]
+        st.rerun()
 
 #%% Fonctions
 
@@ -470,6 +561,9 @@ with visuTab :
                 st.number_input('Marker size', min_value=1, value=8, step=1, key='marker_size')
                 st.multiselect('Choose the markestyle(s) to use', symbols_names, key='marker_select', default='circle')
                 for i in range(len(st.session_state.marker_select)): st.session_state.positions['marker_style'].iloc[i::len(st.session_state.marker_select)]=st.session_state.marker_select[i]
+                st.badge('👇New features !!! 👇', color='red')
+                annotation_spectrum = st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='annotation_spectrum')
+                st.button("Parameters of the annotations", on_click=annotations_parameters)
             with st.expander('Spectra plot parameters'):
                 st.subheader("Graphics parameters")
                 c_s1, c_s2  = st.columns(2)
@@ -590,9 +684,30 @@ with visuTab :
         # No ratio analysis
         else :
             dots = img.add_scatter(x=st.session_state.positions['X'], y=st.session_state.positions['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.positions['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, marker_symbol=st.session_state.positions['marker_style'], name='positions')
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.positions.loc[int(i)]['X'], y=st.session_state.positions.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)))
             dots.update_layout(hovermode='closest')
+            dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
+                                    arrowside = st.session_state.arrow_side,
+                                    arrowsize = st.session_state.arrow_size,
+                                    arrowwidth = st.session_state.arrow_width,
+                                    bgcolor = st.session_state.bg_color,
+                                    bordercolor = st.session_state.border_color,
+                                    borderpad = st.session_state.border_pad,
+                                    borderwidth = st.session_state.border_width,
+                                    height = st.session_state.box_height,
+                                    width = st.session_state.box_width,
+                                    font_color = st.session_state.textfont_color,
+                                    font_family = st.session_state.font_family,
+                                    font_size = st.session_state.font_size,
+                                    font_style = st.session_state.font_style,
+                                    font_textcase = st.session_state.font_textcase,
+                                    font_variant = st.session_state.font_variant,
+                                    textangle  = st.session_state.text_angle,
+                                    valign = st.session_state.vertical_alignement,
+                                    standoff = 2,
+                                    clicktoshow="onoff")
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
-            else : st.plotly_chart(dots, width='content')       
+            else : st.plotly_chart(dots, width='content')
         
         # Spectra selection on map
         if st.session_state.selection_tool=='Selection on map' :
@@ -659,7 +774,7 @@ with visuTab :
                 for d in spectra.data : d.line["dash"], d.marker['symbol'] = next(line_styles), st.session_state.marker_to_plot.loc[int(d.name)]
             
             spectra.update_layout(template=None, margin= {'l': 70,'r': 1, 't': 0}, xaxis_title='Wavenumber [cm-1]',yaxis_title='Amplitude [a.u.]', paper_bgcolor=st.session_state.bkg_color, plot_bgcolor=st.session_state.bkg_color, font_color=st.session_state.font_color,yaxis_gridcolor=st.session_state.grid_color, xaxis_gridcolor=st.session_state.grid_color, yaxis_zerolinecolor=st.session_state.grid_color, height=st.session_state.height_spec, width=st.session_state.width_spec)
-            spectra.update_xaxes(dtick=st.session_state.x_ticks_step, range=[xleft, xright], ticks='outside', title_standoff = 0, gridcolor=st.session_state.grid_color, tickcolor=st.session_state.grid_color, zeroline=True, zerolinecolor=st.session_state.grid_color); spectra.update_yaxes(range=[ybottom, ytop], gridcolor=st.session_state.grid_color, ticks='outside', tickcolor=st.session_state.grid_color)
+            spectra.update_xaxes(dtick=st.session_state.x_ticks_step, range=[xleft, xright], ticks='outside', title_standoff = 0, gridcolor=st.session_state.grid_color, tickcolor=st.session_state.grid_color, zeroline=True, zerolinecolor=st.session_state.grid_color); spectra.update_yaxes(range=[ybottom, ytop], gridcolor=st.session_state.grid_color, ticks='outside', tickcolor=st.session_state.grid_color)           
             # Plot the spectra
             st.plotly_chart(spectra, width='content')
                         
