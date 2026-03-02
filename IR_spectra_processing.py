@@ -564,8 +564,9 @@ with visuTab :
                 st.number_input('Marker size', min_value=1, value=8, step=1, key='marker_size')
                 st.multiselect('Choose the markestyle(s) to use', symbols_names, key='marker_select', default='circle')
                 for i in range(len(st.session_state.marker_select)): st.session_state.positions['marker_style'].iloc[i::len(st.session_state.marker_select)]=st.session_state.marker_select[i]
-                st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='spectra_annotation')
-                st.badge('👇New feature !!! 👇', color='red')
+                st.badge('👇New features !!! 👇', color='red')
+                annotation_spectrum = st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='spectra_annotation')
+                st.write(annotation_spectrum)
                 st.button("Parameters of the annotations", on_click=annotations_parameters)
             with st.expander('Spectra plot parameters'):
                 st.subheader("Graphics parameters")
@@ -687,7 +688,7 @@ with visuTab :
         # No ratio analysis
         else :
             dots = img.add_scatter(x=st.session_state.positions['X'], y=st.session_state.positions['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.positions['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, marker_symbol=st.session_state.positions['marker_style'], name='positions')
-            for i in st.session_state.positions.loc[:][['X','Y']].index : dots.add_annotation(x=st.session_state.positions.loc[int(i)]['X'], y=st.session_state.positions.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)))
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.positions.loc[int(i)]['X'], y=st.session_state.positions.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)))
             dots.update_layout(hovermode='closest')
             dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
                                     arrowside = st.session_state.arrow_side,
