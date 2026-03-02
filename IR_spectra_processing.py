@@ -24,7 +24,6 @@ import zipfile
 from io import StringIO
 from sklearn.preprocessing import normalize
 import os as os
-import kaleido
 
 #%% Définitions de variables
 
