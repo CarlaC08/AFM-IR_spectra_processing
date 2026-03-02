@@ -565,8 +565,7 @@ with visuTab :
                 st.multiselect('Choose the markestyle(s) to use', symbols_names, key='marker_select', default='circle')
                 for i in range(len(st.session_state.marker_select)): st.session_state.positions['marker_style'].iloc[i::len(st.session_state.marker_select)]=st.session_state.marker_select[i]
                 st.badge('👇New features !!! 👇', color='red')
-                annotation_spectrum = st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='spectra_annotation')
-                st.write(annotation_spectrum)
+                annotation_spectrum = st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='annotation_spectrum')
                 st.button("Parameters of the annotations", on_click=annotations_parameters)
             with st.expander('Spectra plot parameters'):
                 st.subheader("Graphics parameters")
