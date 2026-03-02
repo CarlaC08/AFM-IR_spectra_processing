@@ -241,9 +241,6 @@ def no_color_change() :
     st.session_state.colors = st.session_state.positions['color'].loc[selected].values
     st.session_state.to_plot = selected
 
-def index_change():
-    new_index = 0
-
 @st.dialog('Annotations parameters', width="large", dismissible=False)
 def annotations_parameters():
     st.badge('New feature !!!', color='red')
