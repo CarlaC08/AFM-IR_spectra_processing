@@ -10,9 +10,7 @@ import streamlit as st
 import plotly.express as px
 from streamlit_plotly_events import plotly_events
 import numpy as np
-from cycler import cycler
 from scipy.signal import savgol_filter
-from scipy import stats
 import pandas as pd
 from copy import deepcopy
 from pathlib import Path
@@ -53,7 +51,29 @@ if 'fragment_runs' not in st.session_state : st.session_state.fragment_runs=0
 st.session_state.colorscales = [i for j in [[k, k+'_r'] for k in px.colors.named_colorscales()] for i in j]
 symbols_names = [i for i in SymbolValidator().values[2::3] if '-dot' not in i]
 ls_option = ['dash', 'dashdot', 'dot', 'longdash', 'longdashdot', 'solid']
-
+if 'normalization' not in st.session_state : st.session_state.normalization = 'None'
+if 'arrow_color' not in st.session_state : st.session_state.arrow_color = "#FFFFFF"
+if 'arrow_head' not in st.session_state : st.session_state.arrow_head = 1
+if 'arrow_side' not in st.session_state : st.session_state.arrow_side = "end"
+if 'arrow_size' not in st.session_state : st.session_state.arrow_size = 1.0
+if 'arrow_width' not in st.session_state : st.session_state.arrow_width = 1.5
+if 'bg_color' not in st.session_state : st.session_state.bg_color = None
+if 'border_color' not in st.session_state : st.session_state.border_color = None
+if 'border_pad' not in st.session_state : st.session_state.border_pad = 1.0
+if 'border_width' not in st.session_state : st.session_state.border_width = 1.0 
+if 'box_height' not in st.session_state : st.session_state.box_height = None
+if 'box_width' not in st.session_state : st.session_state.box_width = None
+if 'textfont_color' not in st.session_state : st.session_state.textfont_color = "#000000"
+if 'font_family' not in st.session_state : st.session_state.font_family = "Arial"
+if 'font_size' not in st.session_state : st.session_state.font_size = 10.0
+if 'font_style' not in st.session_state : st.session_state.font_style = "normal"
+if 'font_textcase' not in st.session_state : st.session_state.font_textcase = "normal"
+if 'font_variant' not in st.session_state : st.session_state.font_variant = "normal"
+if 'text_angle' not in st.session_state : st.session_state.text_angle = 0
+if 'vertical_alignement' not in st.session_state : st.session_state.vertical_alignement = "middle"
+if 'horizontal_alignement' not in st.session_state : st.session_state.horizontal_alignement = "center"
+if 'abled_bgColor' not in st.session_state : st.session_state.abled_bgColor = False
+if 'abled_BorderColor' not in st.session_state : st.session_state.abled_BorderColor = False
 #%% Fonctions corrections
 
 def find_nearest(array, value):
@@ -209,7 +229,7 @@ def plot_txtcsv(image, color, map_size, map_unit, map_max, map_min, height_px, w
 
 def color_selected_points(selected):
     st.session_state.tempo_df = pd.DataFrame([np.array([1]*len(selected)), sns.color_palette(st.session_state.choose_cmap, n_colors=len(selected)).as_hex()], index=['value', 'colors']).T
-    st.bar_chart(st.session_state.tempo_df, y=['value'], color='colors', use_container_width=True, height=75, y_label=None)
+    st.bar_chart(st.session_state.tempo_df, y=['value'], color='colors', width='stretch', height=75, y_label=None)
 
 def color_change() :
     if st.session_state.choose_cmap[0] == '#' : st.session_state.colors = [st.session_state.choose_cmap]
@@ -220,6 +240,76 @@ def color_change() :
 def no_color_change() :
     st.session_state.colors = st.session_state.positions['color'].loc[selected].values
     st.session_state.to_plot = selected
+
+@st.dialog('Annotations parameters', width="large", dismissible=False)
+def annotations_parameters():
+    st.badge('New feature !!!', color='red')
+    st.write("You can show or hide the annotations directly by clicking on the data point.")
+    c_param,c_fig = st.columns(2)
+    with c_param.expander('Arrow parameters') :
+        c1,c2 = st.columns(2)
+        arrow_head = c1.number_input("Type of the head", min_value=0, max_value=8, value=st.session_state.arrow_head, key='arrow_head_widget')
+        arrow_side = c1.selectbox("Side of the head", ["end", "start", "end+start", "none"], index=0, key='arrow_side_widget')
+        arrow_size = c2.number_input("Size of the head", min_value=0.3, value=st.session_state.arrow_size, key='arrow_size_widget')
+        arrow_width = c2.number_input("Width (in pixel) of the arrow", min_value=0.1, value=st.session_state.arrow_width, key='arrow_width_widget')
+        arrow_color = st.color_picker("Color", value=st.session_state.arrow_color, key="arrow_color_widget")
+    with c_param.expander('Parameters of the box') :
+        c3, c4 = st.columns(2)
+        abled_bgColor = c3.checkbox('Add a colored background', value=st.session_state.abled_bgColor)
+        bg_color_temp = c3.color_picker('Color of the background', value = st.session_state.bg_color, key='bg_color_widget', disabled=(abled_bgColor is False))
+        abled_BorderColor = c4.checkbox('Add a colored border', value=st.session_state.abled_BorderColor)
+        border_color_temp = c4.color_picker('Color of the border', value = st.session_state.border_color, key='border_color_widget', disabled=(abled_BorderColor is False))
+        bg_color = (None if abled_bgColor is False else bg_color_temp)
+        border_color = (None if abled_BorderColor is False else border_color_temp)
+        border_pad = c3.number_input("Space between text and border", min_value=0.0, value=st.session_state.border_pad, key='border_pad_widget')
+        border_width = c4.number_input("Width (in pixel) of the border", min_value=0.0, value=st.session_state.border_width, key='border_width_widget')
+        box_height = c3.number_input('Height of the text box (when None, height is set automatically)', min_value=1.0, value=None, key='box_height_widget')
+        box_width = c4.number_input('Width of the text box (when None, width is set automatically)', min_value=1.0, value=None, key='box_width_widget')
+    with c_param.expander('Text parameters') :
+        c5, c6 = st.columns(2)
+        font_family = c5.selectbox('Family', ["Arial", "Courier New", "Times New Roman"], index=0, key="font_family_widget")
+        font_size = c6.number_input("Size", min_value=1.0, value=st.session_state.font_size, key="font_size_widget")
+        font_style = c5.selectbox('Style', ["normal", "italic"], index=0, key='font_style_widget')
+        font_textcase = c6.selectbox('Text case', ["normal", "word caps", "upper", "lower"], index=0, key='font_textcase_widget')
+        font_variant = c5.selectbox('Variant', ["normal", "small-caps", "all-small-caps", "all-petite-caps", "petite-caps", "unicase"], index=0, key='font_variant_widget')
+        text_angle = c6.number_input('Angle of text respect to the horizontal',min_value=-360, max_value=360, value=st.session_state.text_angle, key='text_angle_widget')
+        vertical_alignement = c5.selectbox('Vertical alignment of the text', ["top", "middle", "bottom"], index=1, key='vertical_alignement_widget')
+        horizontal_alignement = c6.selectbox('Horizontal alignment of the text', ["left", "center", "right"], index=1, key='horizontal_alignement_widget')
+        textfont_color = c5.color_picker('Color', '#000000', key='textfont_color_widget')
+
+        if st.session_state.map=='Topography' :
+            if st.session_state.Topography_image==True : fig = plot_png(st.session_state.Topography, st.session_state.map_size, st.session_state.map_unit, 400, 400, st.session_state.origin)
+            else : fig = plot_txtcsv(st.session_state.Topography,'YlOrBr_r', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'Height (nm)')
+        elif st.session_state.map=='IR' :
+            if st.session_state.IR_image==True : fig = plot_png(st.session_state.IR, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
+            else : fig = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')
+        fig.update_layout(title="Previsualisation of the annotations (here the figure is 400x400 pixels)")
+        fig.add_scatter(x=[0], y=[0])
+        fig.add_annotation(x=0,y=0,text='Spectra n°XX')
+        fig.update_annotations(align=horizontal_alignement, arrowcolor=arrow_color, arrowhead = arrow_head,
+                                        arrowside = arrow_side,
+                                        arrowsize = arrow_size,
+                                        arrowwidth = arrow_width,
+                                        bgcolor = bg_color,
+                                        bordercolor = border_color,
+                                        borderpad = border_pad,
+                                        borderwidth = border_width,
+                                        height = box_height,
+                                        width = box_width,
+                                        font_color = textfont_color,
+                                        font_family = font_family,
+                                        font_size = font_size,
+                                        font_style = font_style,
+                                        font_textcase = font_textcase,
+                                        font_variant = font_variant,
+                                        textangle  = text_angle,
+                                        valign = vertical_alignement,
+                                        standoff = 2,
+                                        clicktoshow="onoff")
+        c_fig.plotly_chart(fig)
+    if st.button('Change parameters', type='primary') :
+        for i in ['arrow_color','arrow_head', 'arrow_side', 'arrow_size','arrow_width','bg_color','border_color','border_pad','border_width','box_height','box_width','textfont_color','font_family','font_size','font_style','font_textcase','font_variant','text_angle','vertical_alignement', 'horizontal_alignement','abled_bgColor','abled_BorderColor'] : st.session_state[i] = vars()[i]
+        st.rerun()
 
 #%% Fonctions
 
@@ -254,17 +344,35 @@ def get_positions(path):
     positions['color'], positions['marker_style'] = 'blue', 'circle'
     return positions, img_size, img_unit
 
+@st.dialog("Select a choice to pursue the normalization")
+def normalization_dialog():
+    normalization = st.radio('Normalization', ['None', 'Divided by max amplitude', 'Vectorial normalization'], key='norm_choice', label_visibility='collapsed')
+    if normalization == 'Divided by max amplitude' : wn_norm_choice = st.number_input('Enter a wavenumber', min_value = min(st.session_state.spectra.columns), max_value = max(st.session_state.spectra.columns), step=st.session_state.spectra.columns[1]-st.session_state.spectra.columns[0], key='wn_norm_choice')
+    normalization_nan_choice = st.radio('In case some values are not number (infinite or "None"), choose an option :', ['ignore', 'change', 'stop'], format_func=lambda x: {'ignore':'Ignore the spectra with wrong values', 'change':'Change the invalid value to 0', 'stop' : "Stop the normalization"}.get(x), key='norm_nan_choice')
+    if st.button('Select this choice') :
+        st.session_state.normalization = normalization
+        st.session_state.normalization_nan_choice = normalization_nan_choice
+        if normalization == 'Divided by max amplitude' : st.session_state.wn_norm = wn_norm_choice
+        st.rerun()
+
+def normalization_choice(normalization_nan_choice, spectra):
+    if normalization_nan_choice == 'ignore' : st.session_state.spectra_choice = spectra.drop(spectra[spectra.isnull().any(axis=1)].index)
+    elif normalization_nan_choice == 'change' :
+        st.session_state.spectra_choice = spectra.copy()
+        st.session_state.spectra_choice[np.isinf(st.session_state.spectra_choice)] = 0; st.session_state.spectra_choice[np.isnan(st.session_state.spectra_choice)] = 0
+    elif normalization_nan_choice == 'stop' : st.session_state.spectra_choice = 'stop'
+
 System_breaks_predefined = {'Nano2' : [1675,1477,1171], 'IconIR': [1706,1411,1209], 'Nano1' : [1712,1420,1100], 'Nano2S' : [1712,1420,1100], 'Mirage' : [1433,1205], 'GloveBox' : [1389,989]}
 
 #%% Application
 
 st.set_page_config(layout='wide')
 st.title('IR spectra processing')
-correctionTab, visuTab = st.tabs(["Laser breaks correction", "Visualisation of IconIR and GloveBox spectra on map"])
+correctionTab, visuTab = st.tabs(["Laser breaks correction", "Visualisation of IconIR spectra on map"])
 
 with correctionTab:
     c1,c2,c3,c4 = st.columns(4)
-    with c1 : system = st.radio('Choose the system', ['GloveBox', 'IconIR', 'Mirage', 'Nano2'], key='system')
+    with c1 : system = st.radio('Choose the system', ['GloveBox', 'IconIR', 'Mirage', 'Nano IR2'], key='system')
     with c2 : divided = st.radio('Spectra are already divided by the background', [True, False], key='divided')
     if system =='Mirage' :
         multiple_file=False
@@ -286,7 +394,7 @@ with correctionTab:
                 with c10 : st.session_state.bkg_files = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'txt'])  
             st.form_submit_button('Submit')
                 
-    elif system =='Nano2' :
+    elif system =='Nano IR2' :
         multiple_file=False
         with  st.form('Nano2_file', clear_on_submit=True) :
             c5,c6 = st.columns(2)
@@ -295,7 +403,7 @@ with correctionTab:
             st.form_submit_button('Submit')
 
     else :
-        with c3 : extension = st.radio('Select the extension typeof the SPECTRA files', ['series', 'txt/csv']).split('/')
+        with c3 : extension = st.radio('Select the extension type of the SPECTRA files', ['series', 'txt/csv']).split('/')
         if extension==['series']: multiple_file=True
         else : multiple_file=False
         with  st.form('IconIR_file', clear_on_submit=True) :
@@ -307,7 +415,7 @@ with correctionTab:
     if (st.session_state.spectra_files==None) or (st.session_state.bkg_files==None) : pass
     else :
         if system == 'GloveBox' or system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_GloveBox(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg, st.session_state.header_bkg = Open_bkg_GloveBox(st.session_state.bkg_files)
-        elif system == 'Nano2': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg, st.session_state.header_bkg = Open_spectrum_nano2(st.session_state.bkg_files)
+        elif system == 'Nano IR2': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg, st.session_state.header_bkg = Open_spectrum_nano2(st.session_state.bkg_files)
         elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = Open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)    
         
         if len(st.session_state.Bkg)>st.session_state.Spec.shape[0] : st.session_state.Bkg = np.array([i for i in st.session_state.Bkg if i[0] in st.session_state.Spec[:,0]])
@@ -331,7 +439,7 @@ with correctionTab:
                 breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1433,1205]).replace(']', '').replace('[', ''), 'Other'])
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
-            elif system == 'Nano2' :
+            elif system == 'Nano IR2' :
                 breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1675,1477,1171]).replace(']', '').replace('[', ''), 'Other'])
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
@@ -364,6 +472,7 @@ with correctionTab:
 
 with visuTab :
     with st.expander('Upload necessary files', expanded=True):
+        st.write("For the code to be able to work successfully, you need to upload the measurment files and the topo/IR map that corresponds to the spectra you want to study. You can import only ONE topography and/or IR map.")
         c1,c2 = st.columns(2) ; c3,c4 = st.columns(2)
         with c1:
             with st.form("Spectra", clear_on_submit=True):
@@ -384,6 +493,7 @@ with visuTab :
                     st.session_state.spectra_initial.index.names = ['Spectrum No']
                     st.session_state.spectra = st.session_state.spectra_initial.copy()  
                     st.session_state.to_plot=np.array([]); st.session_state.spectra_submit=True
+                    st.session_state.wavenumber = st.session_state.spectra.columns.values
         with c2:
             with st.form("Positions", clear_on_submit=True):
                 positions_files = st.file_uploader("Import all measurements files", accept_multiple_files=True, type='xml', help="Upload the measurements files corresponding to your spectra. They can be found in the different subfolder of the folder 'IRMeasurement', under the name '[subfolder-name].Measurement.xml'")
@@ -398,7 +508,7 @@ with visuTab :
                     st.session_state.positions_submit=True         
         with c3 :
             with st.form("Topomap", clear_on_submit=True):
-                topo_file = st.file_uploader("Import the topography", type=['txt','csv','png','tiff'])
+                topo_file = st.file_uploader("Import the topography", type=['txt','csv','png','tiff'], help='You may find a .png file in the same folder you have found the measurment file.')
                 submitted = st.form_submit_button("Submit")
                 if submitted and topo_file is not None:
                     if topo_file.name.endswith('.csv'): st.session_state['Topography'] = pd.read_csv(topo_file); st.session_state['Topography_image'] = False
@@ -424,7 +534,7 @@ with visuTab :
             if st.button('Reset the rows selection'): st.session_state.spectra = st.session_state.spectra_initial.copy()
         test = st.session_state.spectra[st.session_state.spectra.index.duplicated(keep=False)].reset_index()
         if test.shape[0] != 0:
-            duplicated_index = test['index'].unique()
+            duplicated_index = test['Spectrum No'].unique()
             st.session_state.selection = st.session_state.spectra_initial.loc[duplicated_index]
             st.data_editor(st.session_state.selection.reset_index(), disabled=True)
             selected_indices = st.multiselect('Choose the spectra to keep (one/same index)', st.session_state.selection.reset_index().index)
@@ -434,6 +544,7 @@ with visuTab :
         try : st.session_state.positions=st.session_state.positions.loc[st.session_state.spectra.index.values]
         except KeyError : st.error("Your positions doesn't seems to match with the spectra. Re-upload the matching measurement file."); st.stop()
         else : st.session_state.positions=st.session_state.positions.loc[st.session_state.spectra.index.values]
+        
         # Plots parameters and spectra operation
         with st.sidebar :
             with st.popover('See all the different colorscales'): st.write(px.colors.sequential.swatches_continuous()); st.write(px.colors.diverging.swatches_continuous())
@@ -441,10 +552,10 @@ with visuTab :
             if (st.session_state.IR_submit==True) and (st.session_state.topo_submit==False) : default_image='IR'
             elif st.session_state.topo_submit==True : default_image='Topography'
             st.select_slider("Map to use:", ["Topography", "IR"], key='map', value = default_image)
-            with st.expander('Map aspect'):
+            with st.expander('Topo and IR map parameters'):
                 c_w, c_h = st.columns(2, vertical_alignment='bottom')
-                with c_w : width_px = st.number_input('Width in pixels of the map', min_value=10, value=800, key='width_px')
-                with c_h : height_px = st.number_input('Height in pixels of the map', min_value=10, value=800, key='height_px')
+                width_px = c_w.number_input('Width in pixels of the map', min_value=10, value=600, key='width_px')
+                height_px = c_h.number_input('Height in pixels of the map', min_value=10, value=600, key='height_px')
                 if st.session_state[st.session_state.map+'_image']==False:
                     with c_w : map_max = st.number_input('Upper limit of the colorbar', value=np.nanmax(st.session_state[st.session_state.map]), key='map_max')
                     with c_h : map_min = st.number_input('Lower limit of the colorbar', value=np.nanmin(st.session_state[st.session_state.map]), key='map_min')
@@ -452,31 +563,36 @@ with visuTab :
                 st.number_input('Marker size', min_value=1, value=8, step=1, key='marker_size')
                 st.multiselect('Choose the markestyle(s) to use', symbols_names, key='marker_select', default='circle')
                 for i in range(len(st.session_state.marker_select)): st.session_state.positions['marker_style'].iloc[i::len(st.session_state.marker_select)]=st.session_state.marker_select[i]
-            with st.expander('Plot and line(s) aspect'):
-                c_e1, c_e2  = st.columns(2)
-                width_spec = c_e1.number_input('Width in pixels of the spectra graph', min_value=10, value=800, key='width_spec')
-                xleft = c_e1.number_input('Select the left x boundary', value=np.nanmax(st.session_state.spectra.columns), key='xleft')
-                ybottom = c_e1.number_input('Select the bottom y boundary', value=0., step=0.01, key='ybottom')
-                xitcks_step = c_e1.number_input("x ticks' step (cm-1)", min_value=1, value=200, key="x_ticks_step")
-                height_spec = c_e2.number_input('Height in pixels of the spectra graph', min_value=10, value=600, key='height_spec')
-                xright = c_e2.number_input('Select the right x boundary', value=np.nanmin(st.session_state.spectra.columns), key='xright')
-                ytop = c_e2.number_input('Select the top y boundary', value=np.nanmax(np.ma.masked_where(st.session_state.spectra == np.inf, st.session_state.spectra)), step=0.01, key='ytop')
-                legend_show = c_e2.radio('Show legend', [True, False], index=0, key='legend_show', horizontal=True)
-                if legend_show==True:
-                    leg_orient = c_e1.radio('Legend orientation', ['h', 'v'], format_func=lambda x: {'h': "Horizontal",'v': "Vertical"}.get(x), key='leg_orient')
-                    if leg_orient=='h': c_e2.number_input('Legend position in y', value=-0.75, key='y_leg')         
-                offset = st.number_input('Offset between each spectrum', min_value=0., value=0., key='offset',step=1.,format="%.2f")
-                c_color1, c_color2 = st.columns(2)
-                with c_color1 :
-                    bkg_color = st.color_picker('Background plot color', value='#FFFFFF', key = 'bkg_color')
-                    grid_color = st.color_picker('Grid line color', value='#9E9E9E', key = 'grid_color')
-                with c_color2 :
-                    font_color = st.color_picker('Font color', value='#000000', key = 'font_color')
-                    color_container = st.container()
+                st.badge('👇New features !!! 👇', color='red')
+                annotation_spectrum = st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='annotation_spectrum')
+                st.button("Parameters of the annotations", on_click=annotations_parameters)
+            with st.expander('Spectra plot parameters'):
+                st.subheader("Graphics parameters")
+                c_s1, c_s2  = st.columns(2)
+                width_spec = c_s1.number_input('Width in pixels', min_value=10, value=800, key='width_spec')
+                height_spec = c_s2.number_input('Height in pixels', min_value=10, value=600, key='height_spec')
+                bkg_color = c_s1.color_picker('Background plot color', value='#FFFFFF', key = 'bkg_color')
+                grid_color = c_s1.color_picker('Grid line color', value='#9E9E9E', key = 'grid_color')
+                font_color = c_s2.color_picker('Font color', value='#000000', key = 'font_color')
+                color_container = c_s2.container()
                 st.multiselect('Choose the linestyle(s) to use', ls_option, 'solid', key='line_styles_option')
-                st.toggle('Add the marker of the corresponding positions in the legend.', key='marker_appear')          
+                st.subheader('Axis parameters')
+                c_e1, c_e2  = st.columns(2)
+                xleft = c_e1.number_input('Left x axis boundary (cm-1)', value=np.nanmax(st.session_state.wavenumber), key='xleft')
+                ybottom = c_e1.number_input('Bottom y axis boundary', value=0., step=0.01, key='ybottom')
+                xright = c_e2.number_input('Right x axis boundary (cm-1)', value=np.nanmin(st.session_state.wavenumber), key='xright')
+                ytop = c_e2.number_input('Top y axis boundary', value=np.nanmax(np.ma.masked_where(st.session_state.spectra == np.inf, st.session_state.spectra)), step=0.01, key='ytop')
+                xitcks_step = st.number_input("x ticks' step (cm-1)", min_value=1, value=100, key="x_ticks_step")
+                offset = st.number_input('x offset between each spectrum', min_value=0., value=0., key='offset',step=1.,format="%.2f")
+                st.subheader('Legend parameters')
+                c_e3, c_e4  = st.columns(2)
+                legend_show = c_e3.radio('Show legend', [True, False], index=0, key='legend_show', horizontal=True)
+                c_e4.toggle('Add the marker style', key='marker_appear', help='By activating this toggle, the marker corresponding to the positions of the spectra on the map, will appear in the legend of the spectra plot.')          
+                if legend_show==True:
+                    leg_orient = c_e3.radio('Legend orientation', ['h', 'v'], format_func=lambda x: {'h': "Horizontal",'v': "Vertical"}.get(x), key='leg_orient')
+                    if leg_orient=='h': c_e4.number_input('Legend position in y', value=-0.10, key='y_leg', help="The position is set considering the top of the legend box.")
             with st.expander('Spectra selection'):
-                st.radio('Select spectra by :', ['Range', 'Multiselection', 'Selection on map', 'All'], key='selection_tool')
+                st.radio('Select spectra by :', ['Range', 'Multiselection', 'Selection on map', 'All'], key='selection_tool', help="The 'Selection on map' tool is an interactive tool, it will slow the application so use it only if necessary.")
                 # Range selection
                 if st.session_state.selection_tool=='Range' :                    
                     df_range = pd.DataFrame({'Range' : 1, 'StartSpec' : 0, 'EndSpec' : 1}, index=[1]).set_index('Range')
@@ -535,10 +651,8 @@ with visuTab :
                             selected = st.session_state.positions.index
                             st.session_state.colors = st.session_state.positions['color'].loc[selected].values
                             st.session_state.to_plot = selected
-
             with st.expander('Operations on spectra'):
-                st.write('Normalization'); st.radio('Normalization', ['None', 'Divided by max amplitude', 'Vectorial normalization'], key='normalization', label_visibility='collapsed')
-                if st.session_state.normalization == 'Divided by max amplitude' : wn_norm = st.number_input('Enter a wavenumber', min_value = min(st.session_state.spectra.columns), max_value = max(st.session_state.spectra.columns), step=st.session_state.spectra.columns[1]-st.session_state.spectra.columns[0], key='wn_norm')
+                st.button('Normalization', on_click=normalization_dialog)
                 st.divider()
                 st.toggle('Savitsky-Golay filter', key='savgol_operation')
                 if st.session_state.savgol_operation : st.session_state.win_len = st.number_input('Window length', min_value=3, step=2, value=11); st.session_state.polyorder = st.number_input('Polynome order', min_value=1, step=1, value=2); st.session_state.deriv = st.number_input('Derivation order', min_value=0, step=1)
@@ -546,7 +660,7 @@ with visuTab :
                 mean = st.toggle('Mean of selected spectrum'); st.divider()
                 st.toggle('Ratio analysis', key='ratio_analysis')
                 if st.session_state.ratio_analysis :
-                    ratio_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, key='ratio_cmap'); st.number_input('Wavenumber 1 (cm-1)', min_value=np.nanmin(st.session_state.spectra.columns), max_value=np.nanmax(st.session_state.spectra.columns), key='wn_1'); st.number_input('Wavenumber 2 (cm-1)', min_value=np.nanmin(st.session_state.spectra.columns), max_value=np.nanmax(st.session_state.spectra.columns), key='wn_2')
+                    ratio_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, key='ratio_cmap'); st.number_input('Wavenumber 1 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_1'); st.number_input('Wavenumber 2 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_2')
                     with st.popover('Select spectra for the ratio') : select_ratio = st.multiselect('Select spectra for the ratio', [int(i) for i in st.session_state.positions.index], default=[int(i) for i in st.session_state.positions.index])
         ########################################
         # Topography map
@@ -564,7 +678,7 @@ with visuTab :
                 ratio_savgol = pd.DataFrame((savgol_filter(st.session_state.spectra, st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.dots_ratio.index, columns=st.session_state.dots_ratio.columns)
                 st.session_state.z = ratio_savgol[st.session_state.wn_1]/ratio_savgol[st.session_state.wn_2]
             else : st.session_state.z = st.session_state.spectra[st.session_state.wn_1]/st.session_state.spectra[st.session_state.wn_2]
-            dots = img.add_scatter(x=st.session_state.positions['X'].loc[select_ratio], y=st.session_state.positions['Y'].loc[select_ratio], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i], 3)) for i in select_ratio], marker_symbol=st.session_state.positions['marker_style'].loc[select_ratio], marker=dict(color = st.session_state.z.loc[select_ratio], colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.2, title='Ratio')))
+            dots = img.add_scatter(x=st.session_state.positions['X'].loc[select_ratio], y=st.session_state.positions['Y'].loc[select_ratio], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i], 3)) for i in select_ratio], marker_symbol=st.session_state.positions['marker_style'].loc[select_ratio], marker=dict(color = st.session_state.z.loc[select_ratio], colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title='Ratio')))
             dots.update_layout(hovermode='closest')
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
             else : plotly_events(dots, False, False, override_height=height_px)       
@@ -572,9 +686,30 @@ with visuTab :
         # No ratio analysis
         else :
             dots = img.add_scatter(x=st.session_state.positions['X'], y=st.session_state.positions['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.positions['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, marker_symbol=st.session_state.positions['marker_style'], name='positions')
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.positions.loc[int(i)]['X'], y=st.session_state.positions.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)))
             dots.update_layout(hovermode='closest')
+            dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
+                                    arrowside = st.session_state.arrow_side,
+                                    arrowsize = st.session_state.arrow_size,
+                                    arrowwidth = st.session_state.arrow_width,
+                                    bgcolor = st.session_state.bg_color,
+                                    bordercolor = st.session_state.border_color,
+                                    borderpad = st.session_state.border_pad,
+                                    borderwidth = st.session_state.border_width,
+                                    height = st.session_state.box_height,
+                                    width = st.session_state.box_width,
+                                    font_color = st.session_state.textfont_color,
+                                    font_family = st.session_state.font_family,
+                                    font_size = st.session_state.font_size,
+                                    font_style = st.session_state.font_style,
+                                    font_textcase = st.session_state.font_textcase,
+                                    font_variant = st.session_state.font_variant,
+                                    textangle  = st.session_state.text_angle,
+                                    valign = st.session_state.vertical_alignement,
+                                    standoff = 2,
+                                    clicktoshow="onoff")
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
-            else : st.plotly_chart(dots, use_container_width=False)       
+            else : st.plotly_chart(dots, width='content')
         
         # Spectra selection on map
         if st.session_state.selection_tool=='Selection on map' :
@@ -597,8 +732,15 @@ with visuTab :
                 st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
             # Vectorial normalization
             elif st.session_state.normalization == 'Vectorial normalization' :
-                st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra, norm='l2', axis=1), index = st.session_state.spectra.index, columns=st.session_state.spectra.columns)
-                st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
+                if (np.isnan(st.session_state.spectra).sum().sum()>0) or (np.isinf(st.session_state.spectra).sum().sum()>0) :
+                    spectra_choice = normalization_choice(st.session_state.normalization_nan_choice, st.session_state.spectra.copy())
+                    if type(st.session_state.spectra_choice)==str : pass
+                    else :
+                        st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra_choice, norm='l2', axis=1), index = st.session_state.spectra_choice.index, columns=st.session_state.spectra_choice.columns)
+                        st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.spectra_norm.index.intersection(st.session_state.to_plot)].T
+                else :
+                    st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra, norm='l2', axis=1), index = st.session_state.spectra.index, columns=st.session_state.spectra.columns)
+                    st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
             # No normalization
             else : st.session_state.df_toplot=st.session_state.spectra.loc[st.session_state.to_plot].T
             # Mean of the selected spectra
@@ -627,16 +769,16 @@ with visuTab :
                 ###########################
                 spectra = px.line(st.session_state.df_final, color_discrete_sequence = st.session_state.colors, height=st.session_state.height_spec, width=st.session_state.width_spec, markers=mark_app)
                 if st.session_state.legend_show == True :
-                    if st.session_state.leg_orient=='h' : spectra.update_layout(legend=dict(title=None, xanchor="left", yanchor="bottom", itemsizing=leg_itm_size, orientation='h', y=st.session_state.y_leg, x=0, indentation=0, entrywidth=35))
+                    if st.session_state.leg_orient=='h' : spectra.update_layout(legend=dict(title=None, xanchor="left", yanchor="top", itemsizing=leg_itm_size, orientation='h', y=st.session_state.y_leg, x=0, indentation=0, entrywidth=35))
                     else : spectra.update_layout(legend=dict(title=None, yanchor="top", itemsizing=leg_itm_size, orientation='v', indentation=0, entrywidth=35))
                 else : spectra.update_layout(showlegend=False)
                 spectra.update_traces(marker=dict(size=0.1))
                 for d in spectra.data : d.line["dash"], d.marker['symbol'] = next(line_styles), st.session_state.marker_to_plot.loc[int(d.name)]
             
             spectra.update_layout(template=None, margin= {'l': 70,'r': 1, 't': 0}, xaxis_title='Wavenumber [cm-1]',yaxis_title='Amplitude [a.u.]', paper_bgcolor=st.session_state.bkg_color, plot_bgcolor=st.session_state.bkg_color, font_color=st.session_state.font_color,yaxis_gridcolor=st.session_state.grid_color, xaxis_gridcolor=st.session_state.grid_color, yaxis_zerolinecolor=st.session_state.grid_color, height=st.session_state.height_spec, width=st.session_state.width_spec)
-            spectra.update_xaxes(dtick=st.session_state.x_ticks_step, range=[xleft, xright], ticks='outside', title_standoff = 0, gridcolor=st.session_state.grid_color, tickcolor=st.session_state.grid_color, zeroline=True, zerolinecolor=st.session_state.grid_color); spectra.update_yaxes(range=[ybottom, ytop], gridcolor=st.session_state.grid_color, ticks='outside', tickcolor=st.session_state.grid_color)
+            spectra.update_xaxes(dtick=st.session_state.x_ticks_step, range=[xleft, xright], ticks='outside', title_standoff = 0, gridcolor=st.session_state.grid_color, tickcolor=st.session_state.grid_color, zeroline=True, zerolinecolor=st.session_state.grid_color); spectra.update_yaxes(range=[ybottom, ytop], gridcolor=st.session_state.grid_color, ticks='outside', tickcolor=st.session_state.grid_color)           
             # Plot the spectra
-            st.plotly_chart(spectra, use_container_width=False)
+            st.plotly_chart(spectra, width='content')
                         
             with st.container() :
                 savepath = st.text_input('Enter the file path :')
