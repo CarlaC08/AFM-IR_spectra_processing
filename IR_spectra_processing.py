@@ -523,7 +523,7 @@ with visuTab :
                 if submitted and IR_file is not None:
                     if IR_file.name.endswith('.png'): st.session_state['IR'] = cv2.imdecode(np.asarray(bytearray(IR_file.read()), dtype=np.uint8), 1); st.session_state['IR_image'] = True
                     elif IR_file.name.endswith('.csv'): st.session_state['IR'] = pd.read_csv(IR_file); st.session_state['IR_image'] = False
-                    elif IR_file.name.endswith('.tiff') or IR_file.name.endswith('.tif'): st.session_state['IR'] = io.imread(topo_file); st.session_state['IR_image'] = False
+                    elif IR_file.name.endswith('.tiff') or IR_file.name.endswith('.tif'): st.session_state['IR'] = io.imread(IR_file); st.session_state['IR_image'] = False
                     elif IR_file.name.endswith('.txt'): st.session_state['IR'] = np.loadtxt(IR_file, delimiter=';'); st.session_state['IR_image'] = False
                     st.session_state.IR_submit=True
         st.write('Size of the map (topography and/or IR) : ',str(st.session_state.map_size[0]),'x',str(st.session_state.map_size[1]),' ',st.session_state.map_unit)
