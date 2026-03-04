@@ -305,7 +305,9 @@ def annotations_parameters():
                                         textangle  = text_angle,
                                         valign = vertical_alignement,
                                         standoff = 2,
-                                        clicktoshow="onoff")
+                                        clicktoshow="onoff",
+                                        axref='x',
+                                        ax=50)
         c_fig.plotly_chart(fig)
     if st.button('Change parameters', type='primary') :
         for i in ['arrow_color','arrow_head', 'arrow_side', 'arrow_size','arrow_width','bg_color','border_color','border_pad','border_width','box_height','box_width','textfont_color','font_family','font_size','font_style','font_textcase','font_variant','text_angle','vertical_alignement', 'horizontal_alignement','abled_bgColor','abled_BorderColor'] : st.session_state[i] = vars()[i]
@@ -566,6 +568,14 @@ with visuTab :
                 st.badge('👇New features !!! 👇', color='red')
                 annotation_spectrum = st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='annotation_spectrum')
                 st.button("Parameters of the annotations", on_click=annotations_parameters)
+                with st.expander('Positions of annotations'):
+                    c_num, c_x, c_y = st.columns([0.5,0.25,0.25], vertical_alignment='center')
+                    if len(annotation_spectrum)>0 :
+                        for i in annotation_spectrum  :
+                            c_num, c_x, c_y = st.columns([0.5,0.25,0.25], vertical_alignment='bottom')
+                            c_num.write(f'Annonation for position n°{i}')
+                            c_x.number_input('Axis x (µm)', value=st.session_state.positions.loc[i]['X']-0.5, key=f'annotation_{i}_x')
+                            c_y.number_input('Axis y (µm)', value=st.session_state.positions.loc[i]['Y']-0.5, key=f'annotation_{i}_y')
             with st.expander('Spectra plot parameters'):
                 st.subheader("Graphics parameters")
                 c_s1, c_s2  = st.columns(2)
@@ -686,7 +696,7 @@ with visuTab :
         # No ratio analysis
         else :
             dots = img.add_scatter(x=st.session_state.positions['X'], y=st.session_state.positions['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.positions['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, marker_symbol=st.session_state.positions['marker_style'], name='positions')
-            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.positions.loc[int(i)]['X'], y=st.session_state.positions.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)))
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.positions.loc[int(i)]['X'], y=st.session_state.positions.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
             dots.update_layout(hovermode='closest')
             dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
                                     arrowside = st.session_state.arrow_side,
