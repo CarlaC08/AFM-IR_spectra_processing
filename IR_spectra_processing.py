@@ -207,9 +207,17 @@ def Break_correction(Spectrum, X_Breaks, i_Break, n_delta) :
     return Spectrum_stitched
 
 @st.cache_data(ttl=3600, max_entries=1, show_spinner='Break correction')
-def Spectrum_correction(Spec, Bkg, header_spec, _header_bkg, system, off_bkg, X_Breaks, n_delta=2, Bkg_divided = False):
+def Spectrum_correction(Spec, bkg, header_spec, _header_bkg, system, off_bkg, X_Breaks, n_delta=2, Bkg_divided = False, bkg_smoothing = False):
     Spec_corrected = deepcopy(Spec)
     i_Break = [int(find_nearest_idx(Spec[:,0], i)) for i in X_Breaks]
+    if bkg_smoothing == True :
+        i_Break.sort()
+        Bkg = bkg.copy()
+        for i in range(len(i_Break)) :
+            try : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],15,1)
+            except IndexError : pass
+        Bkg[i_Break[-1]+1:,1] = savgol_filter(bkg[i_Break[-1]+1:,1],15,1)
+    else : Bkg=bkg.copy()
     for i in np.arange(1, Spec.shape[1],1):
         if Bkg_divided: Spec[:,(0,i)] = uncorrect_background(Spec[:,(0,i)], Bkg)
         Spectr_bkgcorr = Offset_background_correction(Spec[:,(0,i)], Bkg, Wv_nbr=off_bkg)
@@ -238,7 +246,7 @@ def color_change() :
     st.session_state.to_plot = selected
 
 def no_color_change() :
-    st.session_state.colors = st.session_state.positions['color'].loc[selected].values
+    st.session_state.positions['color'].loc[selected] = st.session_state.colors
     st.session_state.to_plot = selected
 
 @st.dialog('Annotations parameters', width="large", dismissible=False)
@@ -285,7 +293,7 @@ def annotations_parameters():
             else : fig = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')
         fig.update_layout(title="Previsualisation of the annotations (here the figure is 400x400 pixels)")
         fig.add_scatter(x=[0], y=[0])
-        fig.add_annotation(x=0,y=0,text='Spectra n°XX')
+        fig.add_annotation(axref='pixel', x=0, ayref='pixel', y=0,text='Spectra n°XX')
         fig.update_annotations(align=horizontal_alignement, arrowcolor=arrow_color, arrowhead = arrow_head,
                                         arrowside = arrow_side,
                                         arrowsize = arrow_size,
@@ -306,7 +314,6 @@ def annotations_parameters():
                                         valign = vertical_alignement,
                                         standoff = 2,
                                         clicktoshow="onoff",
-                                        axref='x',
                                         ax=50)
         c_fig.plotly_chart(fig)
     if st.button('Change parameters', type='primary') :
@@ -421,13 +428,7 @@ with correctionTab:
         elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = Open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)    
         
         if len(st.session_state.Bkg)>st.session_state.Spec.shape[0] : st.session_state.Bkg = np.array([i for i in st.session_state.Bkg if i[0] in st.session_state.Spec[:,0]])
-
-        with st.expander('Show the background'):
-            fig_bkg = px.line(st.session_state.Bkg, x=0, y=1)
-            fig_bkg.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg.update_xaxes(autorange="reversed")
-            st.plotly_chart(fig_bkg)
-        c_l, c_r = st.columns(2)
-        
+        c_l, c_m, c_r = st.columns(3)        
         with c_l:
             if system == 'GloveBox' :
                 breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1389,989]).replace(']', '').replace('[', ''), str([1402,989]).replace(']', '').replace('[', ''), 'Other'])
@@ -446,10 +447,34 @@ with correctionTab:
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
             st.session_state.breaks_values_use = np.array(re.split(',|, ', st.session_state.breaks_values_enter), float)        
-        with c_r : off_bkg = st.number_input("Wavenumber of the background's offset", min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg')
+        off_bkg = c_m.number_input("Wavenumber of the background's offset", min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg')
+        bkg_smoothed = c_r.radio('Smooth the background ?', [False, True], format_func=lambda x: {False:'No', True:'Yes'}.get(x), key='bkg_smoothed')
+        
+        with st.expander('Show the background'):
+            if bkg_smoothed==True:
+                i_Break = [int(find_nearest_idx(st.session_state.Bkg[:,0], i)) for i in st.session_state.breaks_values_use]
+                i_Break.sort()
+                bkg_new = st.session_state.Bkg.copy()
+                for i in range(len(i_Break)) :
+                    try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],15,1)
+                    except IndexError : pass
+                bkg_new[i_Break[-1]+1:,1] = savgol_filter(bkg_new[i_Break[-1]+1:,1],15,1)
+                bkg_mix = st.session_state.Bkg.T.tolist()
+                bkg_mix.append(bkg_new[:,1].tolist())
+                test_bkg_mix=pd.DataFrame(bkg_mix,index=['Wavenumber', 'Before', 'After']).T.set_index('Wavenumber')
+                fig_bkg_test = px.line(test_bkg_mix, color_discrete_sequence=['blue','red'])
+                fig_bkg_test.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg_test.update_xaxes(autorange="reversed")
+                st.plotly_chart(fig_bkg_test)
+            else :
+                fig_bkg = px.line(st.session_state.Bkg, x=0, y=1)
+                fig_bkg.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg.update_xaxes(autorange="reversed")
+                st.plotly_chart(fig_bkg)
+
+
+        
         spectra_test_selection = st.selectbox('Spectra to use for the test',st.session_state.header_spec.split(',')[1:])      
         idx_selection = [idx for idx in range(len(st.session_state.header_spec.split(','))) if st.session_state.header_spec.split(',')[idx] == spectra_test_selection][0]
-        st.session_state.spectra_test = Spectrum_correction(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg, 'Wavenumber (cm-1),After', st.session_state.header_bkg, st.session_state.system, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided= st.session_state.divided)    
+        st.session_state.spectra_test = Spectrum_correction(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg, 'Wavenumber (cm-1),After', st.session_state.header_bkg, st.session_state.system, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided= st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)    
         st.session_state.spectra_test['Before'] = st.session_state.Spec[:, idx_selection]        
         fig_before = px.line(st.session_state.spectra_test, color_discrete_sequence=['blue','red'])
         fig_before.update_layout(title_text = 'Before vs after break correction', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_before.update_xaxes(autorange="reversed")
@@ -457,7 +482,7 @@ with correctionTab:
         c11, c12 = st.columns(2)
         with c11 : correct = st.button('Correct the laser break !')
         with c12 : container = st.container()
-        if correct : st.session_state.spectra_corrected = Spectrum_correction(st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg, st.session_state.system, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided= st.session_state.divided)
+        if correct : st.session_state.spectra_corrected = Spectrum_correction(st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg, st.session_state.system, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided=st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)
         if 'spectra_corrected' in st.session_state :
             with container.form('Save_form') :
                 st.text_input('Enter the file path :', key='savepath')
@@ -546,7 +571,6 @@ with visuTab :
         try : st.session_state.positions=st.session_state.positions.loc[st.session_state.spectra.index.values]
         except KeyError : st.error("Your positions doesn't seems to match with the spectra. Re-upload the matching measurement file."); st.stop()
         else : st.session_state.positions=st.session_state.positions.loc[st.session_state.spectra.index.values]
-        
         # Plots parameters and spectra operation
         with st.sidebar :
             with st.popover('See all the different colorscales'): st.write(px.colors.sequential.swatches_continuous()); st.write(px.colors.diverging.swatches_continuous())
@@ -563,19 +587,21 @@ with visuTab :
                     with c_h : map_min = st.number_input('Lower limit of the colorbar', value=np.nanmin(st.session_state[st.session_state.map]), key='map_min')
                 st.radio('Select the origin of the map', ['upper', 'lower'], horizontal=True, key='origin')
                 st.number_input('Marker size', min_value=1, value=8, step=1, key='marker_size')
+                st.badge('👇New features !!! 👇', color='red')
+                st.toggle("Only shows the marker of the plotted spectra", value=False, key='marker_spectra')
                 st.multiselect('Choose the markestyle(s) to use', symbols_names, key='marker_select', default='circle')
                 for i in range(len(st.session_state.marker_select)): st.session_state.positions['marker_style'].iloc[i::len(st.session_state.marker_select)]=st.session_state.marker_select[i]
-                st.badge('👇New features !!! 👇', color='red')
                 annotation_spectrum = st.multiselect('Add an annotation for the position of spectrum n°', st.session_state.positions.index.astype(int), key='annotation_spectrum')
                 st.button("Parameters of the annotations", on_click=annotations_parameters)
-                with st.expander('Positions of annotations'):
-                    c_num, c_x, c_y = st.columns([0.5,0.25,0.25], vertical_alignment='center')
-                    if len(annotation_spectrum)>0 :
-                        for i in annotation_spectrum  :
-                            c_num, c_x, c_y = st.columns([0.5,0.25,0.25], vertical_alignment='bottom')
-                            c_num.write(f'Annonation for position n°{i}')
-                            c_x.number_input('Axis x (µm)', value=st.session_state.positions.loc[i]['X']-0.5, key=f'annotation_{i}_x')
-                            c_y.number_input('Axis y (µm)', value=st.session_state.positions.loc[i]['Y']-0.5, key=f'annotation_{i}_y')
+                if len(annotation_spectrum)>0 :
+                    with st.expander('Positions of annotations'):
+                        c_num, c_x, c_y = st.columns([0.5,0.25,0.25], vertical_alignment='center')
+                        if len(annotation_spectrum)>0 :
+                            for i in annotation_spectrum  :
+                                c_num, c_x, c_y = st.columns([0.5,0.25,0.25], vertical_alignment='bottom')
+                                c_num.write(f'Annonation for position n°{i}')
+                                c_x.number_input('Axis x (µm)', value=st.session_state.positions.loc[i]['X']-0.5, key=f'annotation_{i}_x')
+                                c_y.number_input('Axis y (µm)', value=st.session_state.positions.loc[i]['Y']-0.5, key=f'annotation_{i}_y')
             with st.expander('Spectra plot parameters'):
                 st.subheader("Graphics parameters")
                 c_s1, c_s2  = st.columns(2)
@@ -593,16 +619,16 @@ with visuTab :
                 xright = c_e2.number_input('Right x axis boundary (cm-1)', value=np.nanmin(st.session_state.wavenumber), key='xright')
                 ytop = c_e2.number_input('Top y axis boundary', value=np.nanmax(np.ma.masked_where(st.session_state.spectra == np.inf, st.session_state.spectra)), step=0.01, key='ytop')
                 xitcks_step = st.number_input("x ticks' step (cm-1)", min_value=1, value=100, key="x_ticks_step")
-                offset = st.number_input('x offset between each spectrum', min_value=0., value=0., key='offset',step=1.,format="%.2f")
+                offset = st.number_input('x offset between each spectrum', value=0.000, key='offset',step=0.001,format="%.3f")
                 st.subheader('Legend parameters')
                 c_e3, c_e4  = st.columns(2)
                 legend_show = c_e3.radio('Show legend', [True, False], index=0, key='legend_show', horizontal=True)
                 c_e4.toggle('Add the marker style', key='marker_appear', help='By activating this toggle, the marker corresponding to the positions of the spectra on the map, will appear in the legend of the spectra plot.')          
                 if legend_show==True:
                     leg_orient = c_e3.radio('Legend orientation', ['h', 'v'], format_func=lambda x: {'h': "Horizontal",'v': "Vertical"}.get(x), key='leg_orient')
-                    if leg_orient=='h': c_e4.number_input('Legend position in y', value=-0.10, key='y_leg', help="The position is set considering the top of the legend box.")
+                    if leg_orient=='h': c_e4.number_input('Legend position in y', value=-0.1, min_value=-2., max_value=3., key='y_leg', help="The position is set considering the top of the legend box.")
             with st.expander('Spectra selection'):
-                st.radio('Select spectra by :', ['Range', 'Multiselection', 'Selection on map', 'All'], key='selection_tool', help="The 'Selection on map' tool is an interactive tool, it will slow the application so use it only if necessary.")
+                st.radio('Select spectra by :', ['Multiselection', 'Range', 'Selection on map'], key='selection_tool', help="The 'Selection on map' tool is an interactive tool, it will slow the application so use it only if necessary.")
                 # Range selection
                 if st.session_state.selection_tool=='Range' :                    
                     df_range = pd.DataFrame({'Range' : 1, 'StartSpec' : 0, 'EndSpec' : 1}, index=[1]).set_index('Range')
@@ -629,38 +655,21 @@ with visuTab :
                 # Multiselection
                 elif st.session_state.selection_tool=='Multiselection' :
                     mutliselect_spectra = np.array(st.multiselect('Spectra n°', st.session_state.spectra.index))
-                    choose_cmap = st.selectbox('Colorscale for the spectra/marker of the selected positions (_r is the reversed)', st.session_state.colorscales, key='choose_cmap')
+                    choose_cmap = st.selectbox('Colorscale for the spectra/marker of the selected positions (_r is the reversed)', st.session_state.colorscales, index=94, key='choose_cmap')
                     c3, c4 = st.columns([0.7,0.3])
                     with c3 :
                         if st.button('Change colors and plot') :
-                            selected = mutliselect_spectra
-                            selected = st.session_state.positions.index.intersection(selected)
+                            selected = np.sort(st.session_state.positions.index.intersection(mutliselect_spectra))
                             st.session_state.colors = px.colors.sample_colorscale(st.session_state.choose_cmap, [n/(len(selected) -1) for n in range(len(selected))])
                             st.session_state.positions['color'].loc[selected] = st.session_state.colors
                             st.session_state.to_plot = selected
                     with c4 :
                         if st.button('Plot', help="This button doesn't change the color of the spectra") :
-                            selected = mutliselect_spectra
-                            selected = st.session_state.positions.index.intersection(selected)
+                            selected = np.sort(st.session_state.positions.index.intersection(mutliselect_spectra))
                             st.session_state.colors = st.session_state.positions['color'].loc[selected].values
-                            st.session_state.to_plot = mutliselect_spectra
+                            st.session_state.to_plot = selected
                 # Map selection
                 elif st.session_state.selection_tool=='Selection on map' : selection_container = st.container(key='selection_container')
-                # Select all
-                elif st.session_state.selection_tool=='All' :
-                    choose_cmap = st.selectbox('Colorscale for the spectra/marker of the selected positions (_r is the reversed)', st.session_state.colorscales, key='choose_cmap')
-                    c3, c4 = st.columns([0.7,0.3])
-                    with c3 :
-                        if st.button('Change colors and plot') :
-                            selected = st.session_state.positions.index
-                            st.session_state.colors = px.colors.sample_colorscale(st.session_state.choose_cmap, [n/(len(selected) -1) for n in range(len(selected))])
-                            st.session_state.positions['color'].loc[selected] = st.session_state.colors
-                            st.session_state.to_plot = selected
-                    with c4 :
-                        if st.button('Plot', help="This button doesn't change the color of the spectra") :
-                            selected = st.session_state.positions.index
-                            st.session_state.colors = st.session_state.positions['color'].loc[selected].values
-                            st.session_state.to_plot = selected
             with st.expander('Operations on spectra'):
                 st.button('Normalization', on_click=normalization_dialog)
                 st.divider()
@@ -670,8 +679,12 @@ with visuTab :
                 mean = st.toggle('Mean of selected spectrum'); st.divider()
                 st.toggle('Ratio analysis', key='ratio_analysis')
                 if st.session_state.ratio_analysis :
-                    ratio_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, key='ratio_cmap'); st.number_input('Wavenumber 1 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_1'); st.number_input('Wavenumber 2 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_2')
-                    with st.popover('Select spectra for the ratio') : select_ratio = st.multiselect('Select spectra for the ratio', [int(i) for i in st.session_state.positions.index], default=[int(i) for i in st.session_state.positions.index])
+                    ratio_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, index=128, key='ratio_cmap'); st.number_input('Wavenumber 1 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_1'); st.number_input('Wavenumber 2 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_2')
+                    with st.popover('Select spectra for the ratio (only if all markers are shown)') : select_ratio = st.multiselect('Select spectra for the ratio', [int(i) for i in st.session_state.positions.index], default=[int(i) for i in st.session_state.positions.index], disabled=st.session_state.marker_spectra==True)
+                st.divider()
+                st.badge('👇New features !!! 👇', color='red')
+                IR_pos = st.toggle('IR absorption at specific wavenumber', key='IR_analysis', help="To visualise IR signal value of a specific wavenumber, on all position of the map.")
+                if IR_pos : IRanalysis_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, index=128, key='IRanalysis_cmap'); st.number_input('Select a wavenumber', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_IRabs')
         ########################################
         # Topography map
         if st.session_state.map=='Topography' :
@@ -680,23 +693,44 @@ with visuTab :
         # IR map
         elif st.session_state.map=='IR' :
             if st.session_state.IR_image==True : img = plot_png(st.session_state.IR, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
-            else : img = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')
+            else : img = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')        
         # Ratio analysis
         if st.session_state.ratio_analysis :
             # & Savitsky-Golay
+            if st.session_state.marker_spectra == False : st.session_state.markers_activated = st.session_state.positions.loc[select_ratio]
+            else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
             if st.session_state.savgol_operation :
-                ratio_savgol = pd.DataFrame((savgol_filter(st.session_state.spectra, st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.dots_ratio.index, columns=st.session_state.dots_ratio.columns)
+                ratio_savgol = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)
                 st.session_state.z = ratio_savgol[st.session_state.wn_1]/ratio_savgol[st.session_state.wn_2]
-            else : st.session_state.z = st.session_state.spectra[st.session_state.wn_1]/st.session_state.spectra[st.session_state.wn_2]
-            dots = img.add_scatter(x=st.session_state.positions['X'].loc[select_ratio], y=st.session_state.positions['Y'].loc[select_ratio], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i], 3)) for i in select_ratio], marker_symbol=st.session_state.positions['marker_style'].loc[select_ratio], marker=dict(color = st.session_state.z.loc[select_ratio], colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title='Ratio')))
+            else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_1]/st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_2]
+            dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index,
+                                   hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values], marker_symbol=st.session_state.markers_activated['marker_style'],
+                                   marker=dict(color = st.session_state.z, colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title='Ratio')))
+            dots.update_layout(hovermode='closest')
+            if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
+            else : plotly_events(dots, False, False, override_height=height_px)       
+    
+        # IR analysis
+        if st.session_state.IR_analysis :
+            # & Savitsky-Golay
+            # if st.session_state.marker_spectra == False : st.session_state.markers_activated = st.session_state.positions.loc[select_ratio]
+            # else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
+            if st.session_state.savgol_operation : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)[st.session_state.wn_IRabs]
+            else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_IRabs]
+            dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index,
+                                   hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values], marker_symbol=st.session_state.markers_activated['marker_style'],
+                                   marker=dict(color = st.session_state.z, colorscale=st.session_state.IRanalysis_cmap, colorbar=dict(x=+1.4, title=f'Signal at {st.session_state.wn_IRabs} cm-1')))
             dots.update_layout(hovermode='closest')
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
             else : plotly_events(dots, False, False, override_height=height_px)       
 
+
         # No ratio analysis
         else :
-            dots = img.add_scatter(x=st.session_state.positions['X'], y=st.session_state.positions['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.positions['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.positions.index, marker_symbol=st.session_state.positions['marker_style'], name='positions')
-            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.positions.loc[int(i)]['X'], y=st.session_state.positions.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
+            if st.session_state.marker_spectra == False : st.session_state.markers_activated = st.session_state.positions
+            else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
+            dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.markers_activated['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index, marker_symbol=st.session_state.markers_activated['marker_style'], name='positions')
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
             dots.update_layout(hovermode='closest')
             dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
                                     arrowside = st.session_state.arrow_side,
@@ -779,14 +813,15 @@ with visuTab :
                 ###########################
                 spectra = px.line(st.session_state.df_final, color_discrete_sequence = st.session_state.colors, height=st.session_state.height_spec, width=st.session_state.width_spec, markers=mark_app)
                 if st.session_state.legend_show == True :
-                    if st.session_state.leg_orient=='h' : spectra.update_layout(legend=dict(title=None, xanchor="left", yanchor="top", itemsizing=leg_itm_size, orientation='h', y=st.session_state.y_leg, x=0, indentation=0, entrywidth=35))
-                    else : spectra.update_layout(legend=dict(title=None, yanchor="top", itemsizing=leg_itm_size, orientation='v', indentation=0, entrywidth=35))
+                    if st.session_state.leg_orient=='h' : spectra.update_layout(legend=dict(title=None, xanchor="left", yanchor="top", itemsizing=leg_itm_size, orientation='h', y=st.session_state.y_leg, x=0, indentation=0, entrywidth=35, yref='paper'))
+                    else : spectra.update_layout(legend=dict(title=None, yanchor="top", itemsizing=leg_itm_size, orientation='v', entrywidth=35, xref='container',x=0.99,xanchor='right'))
                 else : spectra.update_layout(showlegend=False)
                 spectra.update_traces(marker=dict(size=0.1))
                 for d in spectra.data : d.line["dash"], d.marker['symbol'] = next(line_styles), st.session_state.marker_to_plot.loc[int(d.name)]
             
             spectra.update_layout(template=None, margin= {'l': 70,'r': 1, 't': 0}, xaxis_title='Wavenumber [cm-1]',yaxis_title='Amplitude [a.u.]', paper_bgcolor=st.session_state.bkg_color, plot_bgcolor=st.session_state.bkg_color, font_color=st.session_state.font_color,yaxis_gridcolor=st.session_state.grid_color, xaxis_gridcolor=st.session_state.grid_color, yaxis_zerolinecolor=st.session_state.grid_color, height=st.session_state.height_spec, width=st.session_state.width_spec)
-            spectra.update_xaxes(dtick=st.session_state.x_ticks_step, range=[xleft, xright], ticks='outside', title_standoff = 0, gridcolor=st.session_state.grid_color, tickcolor=st.session_state.grid_color, zeroline=True, zerolinecolor=st.session_state.grid_color); spectra.update_yaxes(range=[ybottom, ytop], gridcolor=st.session_state.grid_color, ticks='outside', tickcolor=st.session_state.grid_color)           
+            spectra.update_xaxes(dtick=st.session_state.x_ticks_step, range=[xleft, xright], ticks='outside', title_standoff = 0, gridcolor=st.session_state.grid_color, tickcolor=st.session_state.grid_color, zeroline=True, zerolinecolor=st.session_state.grid_color); spectra.update_yaxes(range=[ybottom, ytop], gridcolor=st.session_state.grid_color, ticks='outside', tickcolor=st.session_state.grid_color)                       
+            
             # Plot the spectra
             st.plotly_chart(spectra, width='content')
                         
