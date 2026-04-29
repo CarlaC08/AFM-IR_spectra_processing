@@ -713,10 +713,12 @@ with visuTab :
         # IR analysis
         if st.session_state.IR_analysis :
             # & Savitsky-Golay
-            # if st.session_state.marker_spectra == False : st.session_state.markers_activated = st.session_state.positions.loc[select_ratio]
-            # else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
-            if st.session_state.savgol_operation : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)[st.session_state.wn_IRabs]
-            else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_IRabs]
+            if st.session_state.savgol_operation :
+                if 'df_toplot' in st.session_state : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.df_toplot.T.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)[st.session_state.wn_IRabs]
+                else : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)[st.session_state.wn_IRabs]
+            else :
+                if 'df_toplot' in st.session_state : st.session_state.z = st.session_state.df_toplot.T.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_IRabs]
+                else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_IRabs]
             dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index,
                                    hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values], marker_symbol=st.session_state.markers_activated['marker_style'],
                                    marker=dict(color = st.session_state.z, colorscale=st.session_state.IRanalysis_cmap, colorbar=dict(x=+1.4, title=f'Signal at {st.session_state.wn_IRabs} cm-1')))
