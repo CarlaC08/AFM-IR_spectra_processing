@@ -447,7 +447,7 @@ with correctionTab:
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
             st.session_state.breaks_values_use = np.array(re.split(',|, ', st.session_state.breaks_values_enter), float)        
-        off_bkg = c_m.number_input("Wavenumber of the background's offset", min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg')
+        off_bkg = c_m.number_input("Wavenumber of the offset", min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg', help="Enter the wavenumber where you think there is no absorption on your spectra (i.e. where you think your 0 is), it'll correspond to your offset.")
         bkg_smoothed = c_r.radio('Smooth the background ?', [False, True], format_func=lambda x: {False:'No', True:'Yes'}.get(x), key='bkg_smoothed')
         
         with st.expander('Show the background'):
