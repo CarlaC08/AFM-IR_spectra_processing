@@ -32,6 +32,9 @@ from skimage import io
 if 'spectra_files'  not in st.session_state : st.session_state.spectra_files = None
 if 'bkg_files'  not in st.session_state : st.session_state.bkg_files = None
 if 'breaks_wn_val' not in st.session_state : st.session_state.breaks_wn_val = []
+if 'off_bkg' not in st.session_state : st.session_state.off_bkg=None
+if 'window_bkg' not in st.session_state : st.session_state.window_bkg = None
+if 'polynom_order_bkg' not in st.session_state : st.session_state.polynom_order_bkg = None
 
 # Initialisation for the position tab
 if 'list_num' not in st.session_state : st.session_state.list_num=np.array([])
@@ -182,14 +185,16 @@ def uncorrect_background(Spectrum, Background):
     Uncorrected_Spectrum[:,1] = Spectrum[:,1]*Background[:,1]
     return Uncorrected_Spectrum    
 
-def Offset_background_correction(Spectrum, Background, Wv_nbr):
-    i_Section = np.argmin(np.abs(Spectrum[:,0] - Wv_nbr))
-    Offset, i_Offset = np.nanmin(Spectrum[i_Section:,1]), i_Section + np.argmin(Spectrum[i_Section:,1])
-    x_Offset = Spectrum[i_Offset,0]
+def Offset_background_correction(Spectrum, Background, off_app_bkg, Wv_nbr):
     Spect_offcorr = deepcopy(Spectrum)
-    Spect_offcorr[:, 1] = Spect_offcorr[:, 1] - Offset
-    Spectr_bkgcorr = deepcopy(Spect_offcorr)
-    Spectr_bkgcorr[:,1] = Spect_offcorr[:,1]/Background[:,1]
+    if off_app_bkg==True :
+        i_Section = np.argmin(np.abs(Spectrum[:,0] - Wv_nbr))
+        Offset, i_Offset = np.nanmin(Spectrum[i_Section:,1]), i_Section + np.argmin(Spectrum[i_Section:,1])
+        x_Offset = Spectrum[i_Offset,0]
+        Spect_offcorr[:, 1] = Spect_offcorr[:, 1] - Offset
+        Spectr_bkgcorr = deepcopy(Spect_offcorr)
+        Spectr_bkgcorr[:,1] = Spect_offcorr[:,1]/Background[:,1]
+    elif off_app_bkg==False : Spectr_bkgcorr = deepcopy(Spect_offcorr); Spectr_bkgcorr[:,1] = Spect_offcorr[:,1]/Background[:,1]
     return Spectr_bkgcorr
 
 def Stitching_peaces(Spectrum, X_Break, i_Break) :
@@ -207,20 +212,20 @@ def Break_correction(Spectrum, X_Breaks, i_Break, n_delta) :
     return Spectrum_stitched
 
 @st.cache_data(ttl=3600, max_entries=1, show_spinner='Break correction')
-def Spectrum_correction(Spec, bkg, header_spec, _header_bkg, system, off_bkg, X_Breaks, n_delta=2, Bkg_divided = False, bkg_smoothing = False):
+def Spectrum_correction(Spec, bkg, header_spec, _header_bkg, system, off_app_bkg, off_bkg, X_Breaks, n_delta=2, Bkg_divided = False, bkg_smoothing = False):
     Spec_corrected = deepcopy(Spec)
     i_Break = [int(find_nearest_idx(Spec[:,0], i)) for i in X_Breaks]
     if bkg_smoothing == True :
         i_Break.sort()
         Bkg = bkg.copy()
         for i in range(len(i_Break)) :
-            try : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],15,1)
+            try : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg)
             except IndexError : pass
         Bkg[i_Break[-1]+1:,1] = savgol_filter(bkg[i_Break[-1]+1:,1],15,1)
     else : Bkg=bkg.copy()
     for i in np.arange(1, Spec.shape[1],1):
-        if Bkg_divided: Spec[:,(0,i)] = uncorrect_background(Spec[:,(0,i)], Bkg)
-        Spectr_bkgcorr = Offset_background_correction(Spec[:,(0,i)], Bkg, Wv_nbr=off_bkg)
+        if Bkg_divided: Spec[:,(0,i)] = uncorrect_background(Spec[:,(0,i)], bkg)
+        Spectr_bkgcorr = Offset_background_correction(Spec[:,(0,i)], Bkg, off_app_bkg, Wv_nbr=off_bkg)
         Spec_corrected[:,(0,i)] = Break_correction(Spectr_bkgcorr, X_Breaks, i_Break, n_delta)   
     return pd.DataFrame(Spec_corrected, columns=header_spec.split(',')).set_index(header_spec.split(',')[0])
 #%% Fonctions plot
@@ -428,7 +433,7 @@ with correctionTab:
         elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = Open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)    
         
         if len(st.session_state.Bkg)>st.session_state.Spec.shape[0] : st.session_state.Bkg = np.array([i for i in st.session_state.Bkg if i[0] in st.session_state.Spec[:,0]])
-        c_l, c_m, c_r = st.columns(3)        
+        c_l, c_m, c_mif, c_r,c_rif = st.columns([0.2,0.15,0.15,0.15,0.4], gap='xxsmall')        
         with c_l:
             if system == 'GloveBox' :
                 breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1389,989]).replace(']', '').replace('[', ''), str([1402,989]).replace(']', '').replace('[', ''), 'Other'])
@@ -447,16 +452,20 @@ with correctionTab:
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
             st.session_state.breaks_values_use = np.array(re.split(',|, ', st.session_state.breaks_values_enter), float)        
-        off_bkg = c_m.number_input("Wavenumber of the offset", min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg', help="Enter the wavenumber where you think there is no absorption on your spectra (i.e. where you think your 0 is), it'll correspond to your offset.")
+        off_app_bkg = c_m.radio('Apply an offset to spectra before background division', [False, True], key='off_app_bkg')
+        if off_app_bkg==True: off_bkg = c_mif.number_input("Wavenumber of the offset", min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg', help="Enter the wavenumber where you think there is no absorption on your spectra (i.e. where you think your 0 is), it'll correspond to your offset.",width=200)
         bkg_smoothed = c_r.radio('Smooth the background ?', [False, True], format_func=lambda x: {False:'No', True:'Yes'}.get(x), key='bkg_smoothed')
-        
+        if bkg_smoothed==True:
+            with c_rif.expander("Savitsky-Golay Filter parameters"):
+                c_wl, c_pol = st.columns(2)
+                st.session_state.window_bkg = c_wl.number_input("Window length", min_value=3, step=2, value=55); st.session_state.polynom_order_bkg = c_pol.number_input('Polynome order', min_value=1, step=1, value=1)
         with st.expander('Show the background'):
             if bkg_smoothed==True:
                 i_Break = [int(find_nearest_idx(st.session_state.Bkg[:,0], i)) for i in st.session_state.breaks_values_use]
                 i_Break.sort()
                 bkg_new = st.session_state.Bkg.copy()
                 for i in range(len(i_Break)) :
-                    try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],15,1)
+                    try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg)
                     except IndexError : pass
                 bkg_new[i_Break[-1]+1:,1] = savgol_filter(bkg_new[i_Break[-1]+1:,1],15,1)
                 bkg_mix = st.session_state.Bkg.T.tolist()
@@ -469,12 +478,10 @@ with correctionTab:
                 fig_bkg = px.line(st.session_state.Bkg, x=0, y=1)
                 fig_bkg.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg.update_xaxes(autorange="reversed")
                 st.plotly_chart(fig_bkg)
-
-
-        
+     
         spectra_test_selection = st.selectbox('Spectra to use for the test',st.session_state.header_spec.split(',')[1:])      
         idx_selection = [idx for idx in range(len(st.session_state.header_spec.split(','))) if st.session_state.header_spec.split(',')[idx] == spectra_test_selection][0]
-        st.session_state.spectra_test = Spectrum_correction(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg, 'Wavenumber (cm-1),After', st.session_state.header_bkg, st.session_state.system, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided= st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)    
+        st.session_state.spectra_test = Spectrum_correction(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg, 'Wavenumber (cm-1),After', st.session_state.header_bkg, st.session_state.system, st.session_state.off_app_bkg, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided= st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)    
         st.session_state.spectra_test['Before'] = st.session_state.Spec[:, idx_selection]        
         fig_before = px.line(st.session_state.spectra_test, color_discrete_sequence=['blue','red'])
         fig_before.update_layout(title_text = 'Before vs after break correction', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_before.update_xaxes(autorange="reversed")
@@ -482,7 +489,7 @@ with correctionTab:
         c11, c12 = st.columns(2)
         with c11 : correct = st.button('Correct the laser break !')
         with c12 : container = st.container()
-        if correct : st.session_state.spectra_corrected = Spectrum_correction(st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg, st.session_state.system, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided=st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)
+        if correct : st.session_state.spectra_corrected = Spectrum_correction(st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg, st.session_state.system, st.session_state.off_app_bkg, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided=st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)
         if 'spectra_corrected' in st.session_state :
             with container.form('Save_form') :
                 st.text_input('Enter the file path :', key='savepath')
