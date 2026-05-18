@@ -440,7 +440,7 @@ with correctionTab:
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
             elif system == 'IconIR' :
-                breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1706,1411,1209]).replace(']', '').replace('[', ''), str([1390,990]).replace(']', '').replace('[', ''), 'Other'])
+                breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1706,1411,1209]).replace(']', '').replace('[', ''), str([1390,990]).replace(']', '').replace('[', ''), str([1390,1371,990,980]).replace(']', '').replace('[', ''), 'Other'])
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
             elif system == 'Mirage' :
@@ -718,7 +718,7 @@ with visuTab :
             else : plotly_events(dots, False, False, override_height=height_px)       
     
         # IR analysis
-        if st.session_state.IR_analysis :
+        elif st.session_state.IR_analysis :
             # & Savitsky-Golay
             if st.session_state.savgol_operation :
                 if 'df_toplot' in st.session_state : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.df_toplot.T.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)[st.session_state.wn_IRabs]
