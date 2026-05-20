@@ -25,6 +25,7 @@ from io import StringIO
 from sklearn.preprocessing import normalize
 import os as os
 from skimage import io
+import pyspc
 
 #%% Définitions de variables
 
@@ -678,10 +679,13 @@ with visuTab :
                 # Map selection
                 elif st.session_state.selection_tool=='Selection on map' : selection_container = st.container(key='selection_container')
             with st.expander('Operations on spectra'):
-                st.button('Normalization', on_click=normalization_dialog)
+                st.badge('👇New features !!! 👇', color='red')
+                baseline_corr = st.toggle("Rubberband baseline correction", key='baseline_corr', help='If activated, all selected spectra will be corrected by the rubberband method.')
                 st.divider()
                 st.toggle('Savitsky-Golay filter', key='savgol_operation')
                 if st.session_state.savgol_operation : st.session_state.win_len = st.number_input('Window length', min_value=3, step=2, value=11); st.session_state.polyorder = st.number_input('Polynome order', min_value=1, step=1, value=2); st.session_state.deriv = st.number_input('Derivation order', min_value=0, step=1)
+                st.divider()
+                st.button('Normalization', on_click=normalization_dialog)
                 st.divider()
                 mean = st.toggle('Mean of selected spectrum'); st.divider()
                 st.toggle('Ratio analysis', key='ratio_analysis')
@@ -689,7 +693,6 @@ with visuTab :
                     ratio_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, index=128, key='ratio_cmap'); st.number_input('Wavenumber 1 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_1'); st.number_input('Wavenumber 2 (cm-1)', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_2')
                     with st.popover('Select spectra for the ratio (only if all markers are shown)') : select_ratio = st.multiselect('Select spectra for the ratio', [int(i) for i in st.session_state.positions.index], default=[int(i) for i in st.session_state.positions.index], disabled=st.session_state.marker_spectra==True)
                 st.divider()
-                st.badge('👇New features !!! 👇', color='red')
                 IR_pos = st.toggle('IR absorption at specific wavenumber', key='IR_analysis', help="To visualise IR signal value of a specific wavenumber, on all position of the map.")
                 if IR_pos : IRanalysis_cmap = st.selectbox('Colorscale for the ratio (_r is the reversed)', st.session_state.colorscales, index=128, key='IRanalysis_cmap'); st.number_input('Select a wavenumber', min_value=np.nanmin(st.session_state.wavenumber), max_value=np.nanmax(st.session_state.wavenumber), key='wn_IRabs')
         ########################################
@@ -732,7 +735,6 @@ with visuTab :
             dots.update_layout(hovermode='closest')
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
             else : plotly_events(dots, False, False, override_height=height_px)       
-
 
         # No ratio analysis
         else :
@@ -779,23 +781,27 @@ with visuTab :
 
         if st.session_state.to_plot.size != 0 :
             if 'colors' not in st.session_state : st.session_state.colors = st.session_state.positions.loc[st.session_state.to_plot]['color'].values
+            if st.session_state.baseline_corr :
+                converted = pyspc.SpectraFrame(st.session_state.spectra, wl=st.session_state.spectra.columns, data=st.session_state.spectra.index)
+                st.session_state.df_init = converted.sbaseline("rubberband").to_pandas().set_index('Spectrum No')
+            else : st.session_state.df_init = st.session_state.spectra.copy()
             # Max amplitude normalization
             if st.session_state.normalization == 'Divided by max amplitude' :
-                st.session_state.spectra_norm = (st.session_state.spectra.T/st.session_state.spectra[st.session_state.wn_norm]).T            
+                st.session_state.spectra_norm = (st.session_state.df_init.T/st.session_state.df_init[st.session_state.wn_norm]).T            
                 st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
             # Vectorial normalization
             elif st.session_state.normalization == 'Vectorial normalization' :
-                if (np.isnan(st.session_state.spectra).sum().sum()>0) or (np.isinf(st.session_state.spectra).sum().sum()>0) :
+                if (np.isnan(st.session_state.df_init).sum().sum()>0) or (np.isinf(st.session_state.df_init).sum().sum()>0) :
                     spectra_choice = normalization_choice(st.session_state.normalization_nan_choice, st.session_state.spectra.copy())
                     if type(st.session_state.spectra_choice)==str : pass
                     else :
                         st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra_choice, norm='l2', axis=1), index = st.session_state.spectra_choice.index, columns=st.session_state.spectra_choice.columns)
                         st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.spectra_norm.index.intersection(st.session_state.to_plot)].T
                 else :
-                    st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.spectra, norm='l2', axis=1), index = st.session_state.spectra.index, columns=st.session_state.spectra.columns)
+                    st.session_state.spectra_norm = pd.DataFrame(normalize(st.session_state.df_init, norm='l2', axis=1), index = st.session_state.df_init.index, columns=st.session_state.df_init.columns)
                     st.session_state.df_toplot=st.session_state.spectra_norm.loc[st.session_state.to_plot].T
             # No normalization
-            else : st.session_state.df_toplot=st.session_state.spectra.loc[st.session_state.to_plot].T
+            else : st.session_state.df_toplot=st.session_state.df_init.loc[st.session_state.to_plot].T
             # Mean of the selected spectra
             if mean :
                 color_container.color_picker('Color of the mean spectrum and std', key = 'line_color')
@@ -833,7 +839,7 @@ with visuTab :
             
             # Plot the spectra
             st.plotly_chart(spectra, width='content')
-                        
+
             with st.container() :
                 savepath = st.text_input('Enter the file path :')
                 Name = st.text_input('Enter the name of the file')
