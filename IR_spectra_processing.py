@@ -77,6 +77,7 @@ if 'vertical_alignement' not in st.session_state : st.session_state.vertical_ali
 if 'horizontal_alignement' not in st.session_state : st.session_state.horizontal_alignement = "center"
 if 'abled_bgColor' not in st.session_state : st.session_state.abled_bgColor = False
 if 'abled_BorderColor' not in st.session_state : st.session_state.abled_BorderColor = False
+if 'prefix' not in st.session_state : st.session_state.prefix = ''
 #%% Fonctions corrections
 
 def find_nearest(array, value):
@@ -279,6 +280,7 @@ def annotations_parameters():
         box_height = c3.number_input('Height of the text box (when None, height is set automatically)', min_value=1.0, value=None, key='box_height_widget')
         box_width = c4.number_input('Width of the text box (when None, width is set automatically)', min_value=1.0, value=None, key='box_width_widget')
     with c_param.expander('Text parameters') :
+        prefix = st.text_input('Prefix', value=st.session_state.prefix, key='prefix_widget')
         c5, c6 = st.columns(2)
         font_family = c5.selectbox('Family', ["Arial", "Courier New", "Times New Roman"], index=0, key="font_family_widget")
         font_size = c6.number_input("Size", min_value=1.0, value=st.session_state.font_size, key="font_size_widget")
@@ -298,7 +300,7 @@ def annotations_parameters():
             else : fig = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')
         fig.update_layout(title="Previsualisation of the annotations (here the figure is 400x400 pixels)")
         fig.add_scatter(x=[0], y=[0])
-        fig.add_annotation(axref='pixel', x=0, ayref='pixel', y=0,text='Spectra n°XX')
+        fig.add_annotation(axref='pixel', x=0, ayref='pixel', y=0,text=prefix+'XX')
         fig.update_annotations(align=horizontal_alignement, arrowcolor=arrow_color, arrowhead = arrow_head,
                                         arrowside = arrow_side,
                                         arrowsize = arrow_size,
@@ -322,7 +324,7 @@ def annotations_parameters():
                                         ax=50)
         c_fig.plotly_chart(fig)
     if st.button('Change parameters', type='primary') :
-        for i in ['arrow_color','arrow_head', 'arrow_side', 'arrow_size','arrow_width','bg_color','border_color','border_pad','border_width','box_height','box_width','textfont_color','font_family','font_size','font_style','font_textcase','font_variant','text_angle','vertical_alignement', 'horizontal_alignement','abled_bgColor','abled_BorderColor'] : st.session_state[i] = vars()[i]
+        for i in ['arrow_color','arrow_head', 'arrow_side', 'arrow_size','arrow_width','bg_color','border_color','border_pad','border_width','box_height','box_width','textfont_color','font_family','font_size','font_style','font_textcase','font_variant','text_angle','vertical_alignement', 'horizontal_alignement','abled_bgColor','abled_BorderColor','prefix'] : st.session_state[i] = vars()[i]
         st.rerun()
 
 #%% Fonctions
@@ -453,7 +455,7 @@ with correctionTab:
                 else : st.session_state.breaks_values_enter = breaks_values
             st.session_state.breaks_values_use = np.array(re.split(',|, ', st.session_state.breaks_values_enter), float)        
         off_app_bkg = c_m.radio('Apply an offset to spectra before background division', [False, True], key='off_app_bkg')
-        if off_app_bkg==True: off_bkg = c_mif.number_input("Wavenumber of the offset", min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg', help="Enter the wavenumber where you think there is no absorption on your spectra (i.e. where you think your 0 is), it'll correspond to your offset.",width=200)
+        if off_app_bkg==True: off_bkg = c_mif.number_input("Wavenumber of the offset", value=min(st.session_state.Spec[:, 0]), min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg', help="Enter the wavenumber where you think there is no absorption on your spectra (i.e. where you think your 0 is), it'll correspond to your offset.",width=200)
         bkg_smoothed = c_r.radio('Smooth the background ?', [False, True], format_func=lambda x: {False:'No', True:'Yes'}.get(x), key='bkg_smoothed')
         if bkg_smoothed==True:
             with c_rif.expander("Savitsky-Golay Filter parameters"):
@@ -712,7 +714,7 @@ with visuTab :
             else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_1]/st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_2]
             dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index,
                                    hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values], marker_symbol=st.session_state.markers_activated['marker_style'],
-                                   marker=dict(color = st.session_state.z, colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title='Ratio')))
+                                   marker=dict(color = st.session_state.z, colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title=('Ratio '+str(int(st.session_state.wn_1))+'/'+str(int(st.session_state.wn_2))))))
             dots.update_layout(hovermode='closest')
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
             else : plotly_events(dots, False, False, override_height=height_px)       
@@ -739,7 +741,7 @@ with visuTab :
             if st.session_state.marker_spectra == False : st.session_state.markers_activated = st.session_state.positions
             else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
             dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.markers_activated['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index, marker_symbol=st.session_state.markers_activated['marker_style'], name='positions')
-            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text="Spectra n°"+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text=st.session_state.prefix+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
             dots.update_layout(hovermode='closest')
             dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
                                     arrowside = st.session_state.arrow_side,
