@@ -9,3 +9,4 @@ opencv-python
 seaborn
 scikit-learn
 scikit-image
+git+https://github.com/r-hyperspec/pyperspec.git
