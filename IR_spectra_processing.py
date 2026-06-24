@@ -25,7 +25,7 @@ from io import StringIO
 from sklearn.preprocessing import normalize
 import os as os
 from skimage import io
-import pyspc
+import pyspc #from https://github.com/r-hyperspec/pyperspec
 
 #%% Définitions de variables
 
@@ -221,8 +221,10 @@ def Spectrum_correction(Spec, bkg, header_spec, _header_bkg, system, off_app_bkg
         i_Break.sort()
         Bkg = bkg.copy()
         for i in range(len(i_Break)) :
-            try : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg)
+            try : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); Bkg[i_Break[i]] = bkg[i_Break[i]]; Bkg[i_Break[i+1]] = bkg[i_Break[i+1]]
             except IndexError : pass
+            except ValueError :
+                if i_Break[i+1]-i_Break[i] < st.session_state.window_bkg : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],i_Break[i+1]-i_Break[i]-1,st.session_state.polynom_order_bkg); Bkg[i_Break[i]] = bkg[i_Break[i]]; Bkg[i_Break[i+1]] = bkg[i_Break[i+1]]
         Bkg[i_Break[-1]+1:,1] = savgol_filter(bkg[i_Break[-1]+1:,1],15,1)
     else : Bkg=bkg.copy()
     for i in np.arange(1, Spec.shape[1],1):
@@ -456,7 +458,8 @@ with correctionTab:
                 else : st.session_state.breaks_values_enter = breaks_values
             st.session_state.breaks_values_use = np.array(re.split(',|, ', st.session_state.breaks_values_enter), float)        
         off_app_bkg = c_m.radio('Apply an offset to spectra before background division', [False, True], key='off_app_bkg')
-        if off_app_bkg==True: off_bkg = c_mif.number_input("Wavenumber of the offset", value=min(st.session_state.Spec[:, 0]), min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), key='off_bkg', help="Enter the wavenumber where you think there is no absorption on your spectra (i.e. where you think your 0 is), it'll correspond to your offset.",width=200)
+        if off_app_bkg==True: off_bkg = c_mif.number_input("Wavenumber of the offset", value=min(st.session_state.Spec[:, 0]), min_value=min(st.session_state.Spec[:, 0]), max_value=max(st.session_state.Spec[:, 0]), step=np.abs(st.session_state.Spec[0, 0]-st.session_state.Spec[1, 0]), key='off_bkg', help="Enter the wavenumber where you think there is no absorption on your spectra (i.e. where you think your 0 is), it'll correspond to your offset.",width=200)
+        
         bkg_smoothed = c_r.radio('Smooth the background ?', [False, True], format_func=lambda x: {False:'No', True:'Yes'}.get(x), key='bkg_smoothed')
         if bkg_smoothed==True:
             with c_rif.expander("Savitsky-Golay Filter parameters"):
@@ -468,8 +471,11 @@ with correctionTab:
                 i_Break.sort()
                 bkg_new = st.session_state.Bkg.copy()
                 for i in range(len(i_Break)) :
-                    try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg)
+                    try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] =  st.session_state.Bkg[i_Break[i]]; bkg_new[i_Break[i+1]] =  st.session_state.Bkg[i_Break[i+1]]
                     except IndexError : pass
+                    except ValueError :
+                        if i_Break[i+1]-i_Break[i] < st.session_state.window_bkg : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],i_Break[i+1]-i_Break[i]-1,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] = st.session_state.Bkg[i_Break[i]]; bkg_new[i_Break[i+1]] = st.session_state.Bkg[i_Break[i+1]]
+
                 bkg_new[i_Break[-1]+1:,1] = savgol_filter(bkg_new[i_Break[-1]+1:,1],15,1)
                 bkg_mix = st.session_state.Bkg.T.tolist()
                 bkg_mix.append(bkg_new[:,1].tolist())
@@ -712,29 +718,72 @@ with visuTab :
             if st.session_state.marker_spectra == False : st.session_state.markers_activated = st.session_state.positions.loc[select_ratio]
             else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
             if st.session_state.savgol_operation :
-                ratio_savgol = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)
+                ratio_savgol = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.df_toplot.index)
                 st.session_state.z = ratio_savgol[st.session_state.wn_1]/ratio_savgol[st.session_state.wn_2]
             else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_1]/st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_2]
             dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index,
                                    hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values], marker_symbol=st.session_state.markers_activated['marker_style'],
                                    marker=dict(color = st.session_state.z, colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title=('Ratio '+str(int(st.session_state.wn_1))+'/'+str(int(st.session_state.wn_2))))))
-            dots.update_layout(hovermode='closest')
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text=st.session_state.prefix+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
+            dots.update_layout(hovermode='closest', template=None, font_color='black',yaxis_gridcolor='black', xaxis_gridcolor='black', yaxis_zerolinecolor='black')
+            dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
+                                    arrowside = st.session_state.arrow_side,
+                                    arrowsize = st.session_state.arrow_size,
+                                    arrowwidth = st.session_state.arrow_width,
+                                    bgcolor = st.session_state.bg_color,
+                                    bordercolor = st.session_state.border_color,
+                                    borderpad = st.session_state.border_pad,
+                                    borderwidth = st.session_state.border_width,
+                                    height = st.session_state.box_height,
+                                    width = st.session_state.box_width,
+                                    font_color = st.session_state.textfont_color,
+                                    font_family = st.session_state.font_family,
+                                    font_size = st.session_state.font_size,
+                                    font_style = st.session_state.font_style,
+                                    font_textcase = st.session_state.font_textcase,
+                                    font_variant = st.session_state.font_variant,
+                                    textangle  = st.session_state.text_angle,
+                                    valign = st.session_state.vertical_alignement,
+                                    standoff = 2,
+                                    clicktoshow="onoff")
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
             else : plotly_events(dots, False, False, override_height=height_px)       
     
         # IR analysis
         elif st.session_state.IR_analysis :
             # & Savitsky-Golay
+            st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
             if st.session_state.savgol_operation :
-                if 'df_toplot' in st.session_state : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.df_toplot.T.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)[st.session_state.wn_IRabs]
-                else : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.markers_activated.columns)[st.session_state.wn_IRabs]
+                if 'df_toplot' in st.session_state : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.df_toplot.T.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.df_toplot.index)[st.session_state.wn_IRabs]
+                else : st.session_state.z = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=st.session_state.df_toplot.index)[st.session_state.wn_IRabs]
             else :
                 if 'df_toplot' in st.session_state : st.session_state.z = st.session_state.df_toplot.T.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_IRabs]
                 else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_IRabs]
             dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index,
                                    hovertemplate= '%{text}', text  = ['Spectrum n° {} : {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values], marker_symbol=st.session_state.markers_activated['marker_style'],
                                    marker=dict(color = st.session_state.z, colorscale=st.session_state.IRanalysis_cmap, colorbar=dict(x=+1.4, title=f'Signal at {st.session_state.wn_IRabs} cm-1')))
-            dots.update_layout(hovermode='closest')
+            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text=st.session_state.prefix+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
+            dots.update_layout(hovermode='closest', template=None, font_color='black',yaxis_gridcolor='black', xaxis_gridcolor='black', yaxis_zerolinecolor='black')
+            dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
+                                    arrowside = st.session_state.arrow_side,
+                                    arrowsize = st.session_state.arrow_size,
+                                    arrowwidth = st.session_state.arrow_width,
+                                    bgcolor = st.session_state.bg_color,
+                                    bordercolor = st.session_state.border_color,
+                                    borderpad = st.session_state.border_pad,
+                                    borderwidth = st.session_state.border_width,
+                                    height = st.session_state.box_height,
+                                    width = st.session_state.box_width,
+                                    font_color = st.session_state.textfont_color,
+                                    font_family = st.session_state.font_family,
+                                    font_size = st.session_state.font_size,
+                                    font_style = st.session_state.font_style,
+                                    font_textcase = st.session_state.font_textcase,
+                                    font_variant = st.session_state.font_variant,
+                                    textangle  = st.session_state.text_angle,
+                                    valign = st.session_state.vertical_alignement,
+                                    standoff = 2,
+                                    clicktoshow="onoff")
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(img, select_event=True, override_height=height_px)
             else : plotly_events(dots, False, False, override_height=height_px)       
 
@@ -744,7 +793,7 @@ with visuTab :
             else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
             dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_color=st.session_state.markers_activated['color'], marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index, marker_symbol=st.session_state.markers_activated['marker_style'], name='positions')
             for i in annotation_spectrum : dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text=st.session_state.prefix+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
-            dots.update_layout(hovermode='closest')
+            dots.update_layout(hovermode='closest', template=None, font_color='black',yaxis_gridcolor='black', xaxis_gridcolor='black', yaxis_zerolinecolor='black')
             dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
                                     arrowside = st.session_state.arrow_side,
                                     arrowsize = st.session_state.arrow_size,
