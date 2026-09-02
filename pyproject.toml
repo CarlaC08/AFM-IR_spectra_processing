@@ -1,19 +1,23 @@
 [project]
 name = "AFM-IR_spectra_processing"
 description = "Tools to process AFM-IR spectra (from IconIR, NanoIR2 and the IconIR GloveBox) and OPT-IR (from mIRage system)"
-authors = [{ name="COLLANGE Carla", email="carla.collange@universite-paris-saclay.fr" }],
+authors = [{ name="COLLANGE Carla", email="carla.collange@universite-paris-saclay.fr" }]
 readme = "README.md"
 license = "MIT"
 keywords = ["AFMIR", "Nanospectroscopy", "QCL breaks", "Infrared Force Volume", "IconIR"]
-requires-python = ">=3.8"
+requires-python = ">=3.14"
 dependencies = [
-    "streamlit",
-    "plotly",
-    "streamlit-plotly-events",
-    "numpy",
-    "cycler",
-    "scipy",
-    "pandas",
-    "opencv-python",
-    "seaborn",
-    "scikit-learn",]
+    "streamlit>=1.63.0",
+    "plotly>=5.24.1,<7.0.0",
+    "streamlit-plotly-events==0.0.6",
+    "numpy>=2.5.2",
+    "cycler>=0.12.1",
+    "scipy>=1.18.1",
+    "pandas>=2.3.3,<3.0.0",
+    "opencv-python>=5.0.0.93",
+    "seaborn>=0.13.2",
+    "scikit-learn>=1.9.0",
+    "scikit-image>=0.26.0",
+    "lxml>=6.1.2",
+    "pyperspec @ git+https://github.com/r-hyperspec/pyperspec.git",
+]

@@ -12,20 +12,24 @@ from streamlit_plotly_events import plotly_events
 import numpy as np
 from scipy.signal import savgol_filter
 import pandas as pd
-from copy import deepcopy
-from pathlib import Path
 from itertools import cycle
 import cv2
 import plotly.graph_objects as go
 from plotly.validators.scatter.marker import SymbolValidator
 import seaborn as sns
 import re
-import zipfile
-from io import StringIO
 from sklearn.preprocessing import normalize
 import os as os
 from skimage import io
 from app_state import initialize_session_state
+from spectra_io import (
+    open_background_glove_box,
+    open_series,
+    open_spectrum_glove_box,
+    open_spectrum_mirage,
+    open_spectrum_nano2,
+)
+from spectra_correction import SpectrumCorrectionConfig, correct_spectra, find_nearest_idx
 
 # #### AI-ASSISTED BLOCK START [GPT-5.3-Codex | 2026-08-04 | no external source code copied]
 # AI intent: make optional spectral baseline dependency safe for environments where pyspc is not installed.
@@ -68,164 +72,7 @@ if 'baseline_corr' not in st.session_state : st.session_state.baseline_corr = Fa
 if 'to_plot' not in st.session_state or st.session_state.to_plot is None: st.session_state.to_plot = np.array([], dtype=int)
 # #### AI-ASSISTED BLOCK END
 #%% Correction functions
-
-def find_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return array[idx]
-
-def find_nearest_idx(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return idx
-
-def Open_spectrum_mirage(Path_spectra, Path_bkg, type_register, bkg_in_file, organisation) :
-    if type_register=='No':
-        if organisation=='Row':
-            Spectra_file = pd.read_csv(Path_spectra, header=None).T.dropna()
-            Spectra_file.columns = Spectra_file.iloc[0]
-            Spectra_file = Spectra_file.drop(index=0).astype(float)
-        else : Spectra_file = pd.read_csv(Path_spectra, header=0).dropna()
-        if bkg_in_file=='Yes' :
-            Spectra_header, bkg_header = [i for i in Spectra_file.columns if 'mV' in i or 'cm' in i], [i for i in Spectra_file.columns if 'Background' in i or 'cm' in i]
-            sorted_arr_spec, sorted_arr_bkg = Spectra_file.loc[:,Spectra_header].values, Spectra_file.loc[:,bkg_header].values
-        else :
-            Bkg_file = pd.read_csv(Path_bkg, header=0).dropna()
-            Spectra_header, bkg_header = Spectra_file.columns, Bkg_file.columns
-            sorted_arr_spec, sorted_arr_bkg = Spectra_file.loc[:,Spectra_header].values, Bkg_file.loc[:,bkg_header].values
-    else :
-        Spectra_file = pd.read_csv(Path_spectra, header=None).T.dropna() ; Bkg_file = pd.read_csv(Path_bkg, header=0).dropna()
-        Spectra_file = Spectra_file.iloc[2:,:]
-        Spectra_header, bkg_header = ['Wavenumber'] + ['Spectrum_'+str(i) for i in range(Spectra_file.shape[1]-1)], Bkg_file.columns
-        sorted_arr_spec, sorted_arr_bkg = Spectra_file.reset_index().drop('index', axis=1).values, Bkg_file.loc[:,bkg_header].values
-    Spectra_header, bkg_header = ','.join(Spectra_header), ','.join(bkg_header)
-    sorted_arr_spec = sorted_arr_spec[(sorted_arr_spec[:,0]>=1241) | (sorted_arr_spec[:,0]<=1211)]
-    sorted_arr_bkg = sorted_arr_bkg[(sorted_arr_bkg[:,0]>=1241) | (sorted_arr_bkg[:,0]<=1211)]
-    return sorted_arr_spec, sorted_arr_bkg, Spectra_header, bkg_header
-
-def Open_series(series_file):
-    with zipfile.ZipFile(series_file, 'r') as zip:
-        file_names = zip.namelist()
-        with zip.open(file_names[0],'r') as f:
-            binary_data = f.read().decode('ascii').split('Series0')[1].split(' ')
-            name, yunit, kind =  [series_file.name.replace('.series','')][0], [i.split('NameY=')[1].replace('"', '') for i in binary_data if 'NameY=' in i][0], [i.split('Kind=')[1].replace('"', '') for i in binary_data if 'Kind=' in i][0]
-        with zip.open(file_names[-1],'r') as f:
-            if kind == 'Text':
-                spectrum = pd.DataFrame(data = np.loadtxt(f,delimiter=','), columns=['Wavenumber (cm-1)',name.replace('.Series', '')+' ('+yunit+')'])
-            elif kind == 'Binary':
-                d = np.frombuffer(f.read(), dtype=np.float64)
-                half = len(d) // 2
-                spectrum = pd.DataFrame({'Wavenumber (cm-1)': d[:half], name+' ('+yunit+')': d[half:]})
-    return spectrum
-
-def Open_spectrum_GloveBox(Path, extension, multiple_file) :
-    if extension == ['series'] :
-        if multiple_file==False: Spectra_lines = Open_series(Path)
-        else : Spectra_lines = pd.concat([Open_series(i) for i in Path], axis=1).T.drop_duplicates(keep='first').T
-        Data, Spectra_header = Spectra_lines.values, ','.join(Spectra_lines.columns.values)
-    else:
-        Spectra_lines = [str(i, encoding='utf-8') for i in Path.readlines()]
-        header = Spectra_lines[0].split(',')[1:]
-        Spectra_header = ','.join(["Wavenumber"] + ['Spectrum.'+i.split('/')[0].split('.')[-1] for i in header])
-        Data = np.zeros((len(Spectra_lines)-1,len(Spectra_header.split(','))))
-        for i in range(1,len(Spectra_lines)) :
-            Line = Spectra_lines[i].split(',')
-            for j in range(len(Line)) :
-                if (Line[j] != '\n') and (Line[j] != '') and (Line[j] != '\r\n'): Data[i-1,j] = float(Line[j])
-    sorted_arr = Data[np.argsort(Data[:, 0])]
-    return sorted_arr, Spectra_header
-
-def Open_bkg_GloveBox(Path) :
-    if ('.series' in Path.name) or ('.Series' in Path.name)  :
-        Spectra_lines = Open_series(Path)
-        Data, Spectra_header = Spectra_lines.values, ','.join(Spectra_lines.columns.values)
-    else:
-        Spectra_lines = [str(i, encoding='utf-8') for i in Path.readlines()]
-        header = Spectra_lines[0].split(',')[1:]
-        Spectra_header = ','.join(["Wavenumber"] + ['Spectrum.'+i.split('/')[0].split('.')[-1] for i in header])
-        Data = np.zeros((len(Spectra_lines)-1,len(Spectra_header.split(','))))
-        for i in range(1,len(Spectra_lines)) :
-            Line = Spectra_lines[i].split(',')
-            for j in range(len(Line)) :
-                if (Line[j] != '\n') and (Line[j] != '') and (Line[j] != '\r\n'): Data[i-1,j] = float(Line[j])
-    sorted_arr = Data[np.argsort(Data[:, 0])]
-    return sorted_arr, Spectra_header
-
-def Open_spectrum_nano2(Path) :
-    if '.irb' in Path.name :
-        infos = StringIO(Path.getvalue().decode("utf-16")).read()
-        params, spectra_info = re.split('<Table>|</Table>', infos)[0:2]
-        file = pd.DataFrame(re.split('<double>|</double>', spectra_info)[1::2], columns=['Background'])        
-        wn = np.linspace(float(re.split('<StartWavenumber>|</StartWavenumber>', params)[1]), float(re.split('<EndWavenumber>|</EndWavenumber>', params)[1]), file.shape[0])
-        sorted_arr = pd.DataFrame([wn, [float(i.replace('<double>','').replace('</double>','')) for i in file.iloc[:,0]]]).T.values
-        Spectra_header = ['cm-1'+re.split('<Units>|</Units>', params)[1]]
-    else :
-        Spectra_lines_read = StringIO(Path.getvalue().decode("utf-8")).read()
-        Spectra_lines =[i.split(',') for i in Spectra_lines_read.split('\n')]
-        Spectra_lines = pd.DataFrame(Spectra_lines)
-        Spectra_lines.columns = Spectra_lines.iloc[0]
-        Spectra_lines=Spectra_lines.drop(columns=[i for i in Spectra_lines.columns if 'deg' in i])[1:-1].astype(float)
-        header = Spectra_lines.columns[1:]
-        Spectra_header = ','.join(["Wavenumber"] + [i.split('/')[0].replace(' ','.') for i in header])
-        sorted_arr = Spectra_lines.values
-    return sorted_arr, Spectra_header
-    
-def uncorrect_background(Spectrum, Background):
-    Uncorrected_Spectrum = deepcopy(Spectrum)
-    Uncorrected_Spectrum[:,1] = Spectrum[:,1]*Background[:,1]
-    return Uncorrected_Spectrum    
-
-def Offset_background_correction(Spectrum, Background, off_app_bkg, Wv_nbr):
-    Spect_offcorr = deepcopy(Spectrum)
-    if off_app_bkg==True :
-        i_Section = np.argmin(np.abs(Spectrum[:,0] - Wv_nbr))
-        Offset, i_Offset = np.nanmin(Spectrum[i_Section:,1]), i_Section + np.argmin(Spectrum[i_Section:,1])
-        x_Offset = Spectrum[i_Offset,0]
-        Spect_offcorr[:, 1] = Spect_offcorr[:, 1] - Offset
-        Spectr_bkgcorr = deepcopy(Spect_offcorr)
-        Spectr_bkgcorr[:,1] = Spect_offcorr[:,1]/Background[:,1]
-    elif off_app_bkg==False : Spectr_bkgcorr = deepcopy(Spect_offcorr); Spectr_bkgcorr[:,1] = Spect_offcorr[:,1]/Background[:,1]
-    return Spectr_bkgcorr
-
-def Stitching_peaces(Spectrum, X_Break, i_Break) :
-    New_spectrum = deepcopy(Spectrum)
-    beta = Spectrum[i_Break+1,1]/Spectrum[i_Break-1,1]
-    Y_Break = Spectrum[i_Break+1,1]
-    New_spectrum[:i_Break,1] = Spectrum[:i_Break,1]*beta
-    New_spectrum[i_Break,1] = Y_Break
-    return New_spectrum   
-
-def Break_correction(Spectrum, X_Breaks, i_Break, n_delta) :
-    Spectrum_stitched = deepcopy(Spectrum)
-    for i, X_Break in enumerate(X_Breaks):
-        Spectrum_stitched = Stitching_peaces(Spectrum_stitched, X_Break, i_Break[i])
-    return Spectrum_stitched
-
-@st.cache_data(ttl=3600, max_entries=1, show_spinner='Break correction')
-# #### AI-ASSISTED BLOCK START [GPT-5.3-Codex | 2026-08-04 | no external source code copied]
-# AI intent: make batch spectral correction more robust by combining offset/background correction,
-# break stitching, and guarded smoothing fallback when segment sizes are incompatible.
-def Spectrum_correction(Spec, bkg, header_spec, _header_bkg, system, off_app_bkg, off_bkg, X_Breaks, n_delta=2, Bkg_divided = False, bkg_smoothing = False):
-    Spec_corrected = deepcopy(Spec)
-    i_Break = [int(find_nearest_idx(Spec[:,0], i)) for i in X_Breaks]
-    if bkg_smoothing == True :
-        i_Break.sort()
-        Bkg = bkg.copy()
-        for i in range(len(i_Break)) :
-            try : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); Bkg[i_Break[i]] = bkg[i_Break[i]]; Bkg[i_Break[i+1]] = bkg[i_Break[i+1]]
-            except IndexError : pass
-            except ValueError :
-                if i_Break[i+1]-i_Break[i] < st.session_state.window_bkg : Bkg[i_Break[i]:i_Break[i+1],1] = savgol_filter(bkg[i_Break[i]:i_Break[i+1],1],i_Break[i+1]-i_Break[i]-1,st.session_state.polynom_order_bkg); Bkg[i_Break[i]] = bkg[i_Break[i]]; Bkg[i_Break[i+1]] = bkg[i_Break[i+1]]
-        Bkg[i_Break[-1]+1:,1] = savgol_filter(bkg[i_Break[-1]+1:,1],15,1)
-    else : Bkg=bkg.copy()
-    for i in np.arange(1, Spec.shape[1],1):
-        current_spectrum = Spec[:,(0,i)]
-        if Bkg_divided: current_spectrum = uncorrect_background(current_spectrum, bkg)
-        Spectr_bkgcorr = Offset_background_correction(current_spectrum, Bkg, off_app_bkg, Wv_nbr=off_bkg)
-        Spec_corrected[:,(0,i)] = Break_correction(Spectr_bkgcorr, X_Breaks, i_Break, n_delta)   
-    return pd.DataFrame(Spec_corrected, columns=header_spec.split(',')).set_index(header_spec.split(',')[0])
-# #### AI-ASSISTED BLOCK END
-#%% Fonctions plot
+#%% Plot functions
 
 @st.cache_data(max_entries=5, show_spinner=False)
 def plot_png(image, map_size, map_unit, height_px, width_px, origin):
@@ -326,7 +173,7 @@ def annotations_parameters():
         elif st.session_state.map=='IR' :
             if st.session_state.IR_image==True : fig = plot_png(st.session_state.IR, st.session_state.map_size, st.session_state.map_unit, st.session_state.height_px, st.session_state.width_px, st.session_state.origin)
             else : fig = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')
-        fig.update_layout(title="Previsualisation of the annotations (here the figure is 400x400 pixels)")
+        fig.update_layout(title="Annotation preview (the figure is 400x400 pixels)")
         fig.add_scatter(x=[0], y=[0])
         fig.add_annotation(axref='pixel', x=0, ayref='pixel', y=0,text=prefix+'XX')
         fig.update_annotations(align=horizontal_alignement, arrowcolor=arrow_color, arrowhead = arrow_head,
@@ -355,7 +202,7 @@ def annotations_parameters():
         for i in ['arrow_color','arrow_head', 'arrow_side', 'arrow_size','arrow_width','bg_color','border_color','border_pad','border_width','box_height','box_width','textfont_color','font_family','font_size','font_style','font_textcase','font_variant','text_angle','vertical_alignement', 'horizontal_alignement','abled_bgColor','abled_BorderColor','prefix'] : st.session_state[i] = vars()[i]
         st.rerun()
 
-#%% Fonctions
+#%% Functions
 
 def toast_appearance():
     st.markdown(
@@ -433,7 +280,7 @@ def parse_break_values(raw_values):
     try: return np.array([float(token) for token in tokens], dtype=float)
     except ValueError as error: raise ValueError("Break values must be numeric") from error
 
-System_breaks_predefined = {'Nano2' : [1675,1477,1171], 'Nano IR2' : [1675,1477,1171], 'IconIR': [1706,1411,1209], 'Nano1' : [1712,1420,1100], 'Nano2S' : [1712,1420,1100], 'Mirage' : [1433,1205], 'GloveBox' : [1389,989]}
+System_breaks_predefined = {'Nano2' : [1675,1477,1171], 'Nano IR2' : [1675,1477,1171], 'IconIR': [1706,1411,1209], 'Nano1' : [1712,1420,1100], 'Nano2S' : [1712,1420,1100], 'Mirage' : [1433,1205]}
 
 @st.dialog("Select the Savitsky-Golay Filter parameters")
 def savgol_params():
@@ -455,16 +302,134 @@ def extract_peaks_from_first_derivative(df): ###Detects strict zero-crossings (>
     return results
 # #### AI-ASSISTED BLOCK END
 
+# #### AI-ASSISTED BLOCK START [GPT-5.3-Codex | 2026-09-02 | no external source code copied]
+# AI intent: Render peak-distribution statistics and let users inspect which spectra contain a selected peak within a configurable tolerance.
+def render_peak_statistics(xleft, xright):
+    if 'df_final' not in st.session_state or st.session_state.df_final.empty:
+        st.info("Generate or plot spectra in the 'Data manipulation' tab first.")
+        return
+
+    if st.button(
+        'Get IR band distribution by 1st derivative',
+        help='Extract peaks from the first derivative and show their occurrence across the selected spectra.',
+        key='extract_peaks',
+    ):
+        if st.session_state.savgol_operation and 'deriv' in st.session_state:
+            st.session_state.df_deriv_1 = st.session_state.df_final
+        else:
+            savgol_params()
+
+    derivative_spectra = st.session_state.get('df_deriv_1')
+    if derivative_spectra is None or derivative_spectra.empty:
+        return
+
+    peaks_per_spectrum = extract_peaks_from_first_derivative(derivative_spectra)
+    all_peaks = [peak for peak_list in peaks_per_spectrum.values() for peak in peak_list]
+    df_total_peaks = pd.DataFrame({'Wavenumber': all_peaks})
+    if df_total_peaks.empty:
+        st.warning('No peaks detected in the provided spectra.')
+        return
+
+    st.subheader(f"Peak distribution ({len(np.unique(df_total_peaks))} peaks found across {len(derivative_spectra.columns)} spectra)")
+    histogram = px.histogram(
+        df_total_peaks,
+        x='Wavenumber',
+        title='Peak occurrence frequency per wavenumber (cm-1)',
+        labels={'Wavenumber': 'Wavenumber (cm-1)', 'count': 'Number of spectra'},
+        color_discrete_sequence=['#0a9383'],
+    )
+    histogram.update_traces(xbins=dict(start=xright, end=xleft, size=1))
+    histogram.update_layout(
+        xaxis_title='Wavenumber (cm-1)',
+        yaxis_title='Number of spectra with this peak',
+        bargap=0.05,
+        hovermode='x unified',
+        height=st.session_state.height_spec,
+        width=st.session_state.width_spec,
+    )
+    histogram.update_xaxes(range=[xleft, xright])
+    st.plotly_chart(histogram, width='content')
+
+    st.subheader('Explore a peak across spectra')
+    peak_options = sorted({round(float(peak), 3) for peak in all_peaks})
+    selected_peak = st.selectbox('Peak wavenumber (cm-1)', peak_options, key='peak_to_explore')
+    tolerance = st.number_input('Tolerance (cm-1)', min_value=0.0, value=2.0, step=0.5, key='peak_tolerance')
+    peak_presence = {
+        spectrum_id: any(abs(float(peak) - selected_peak) <= tolerance for peak in peaks)
+        for spectrum_id, peaks in peaks_per_spectrum.items()
+    }
+    peak_results = pd.DataFrame(
+        {
+            'Spectrum No.': list(peak_presence.keys()),
+            'Peak found': list(peak_presence.values()),
+        }
+    ).sort_values('Spectrum No.')
+    found_spectra = peak_results.loc[peak_results['Peak found'], 'Spectrum No.'].tolist()
+    missing_spectra = peak_results.loc[~peak_results['Peak found'], 'Spectrum No.'].tolist()
+    found_column, missing_column = st.columns(2)
+    found_column.metric('Spectra with this peak', len(found_spectra))
+    missing_column.metric('Spectra without this peak', len(missing_spectra))
+    st.dataframe(peak_results, hide_index=True, width='stretch')
+# #### AI-ASSISTED BLOCK END
+
 
 #%% Application
 
-st.set_page_config(layout='wide')
-st.title('IR spectra processing')
-correctionTab, visuTab = st.tabs(["Laser breaks correction", "Visualisation of IconIR spectra on map"])
+page = os.environ.get("AFM_IR_PAGE")
+if page is None:
+    st.set_page_config(page_title="IR spectra processing", layout="wide")
+    st.markdown(
+        """
+        <style>
+            [data-testid="stTopNav"] a {
+                min-height: 3.25rem;
+                padding: 0.8rem 1.35rem;
+                font-size: 1.08rem;
+                font-weight: 600;
+                color: #24424a;
+                background-color: #e6f1f2;
+                border: 2px solid #9bc4c8;
+                border-radius: 0.5rem;
+                margin: 0.2rem 0.25rem;
+            }
 
-with correctionTab:
+            [data-testid="stTopNav"] a span {
+                font-size: 1.08rem;
+            }
+
+            [data-testid="stTopNav"] a:hover {
+                color: #16343a;
+                background-color: #cfe5e7;
+                border-color: #4f9299;
+            }
+
+            [data-testid="stTopNav"] a[aria-current="page"] {
+                color: #ffffff;
+                background-color: #16727b;
+                border-color: #0d5057;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    selected_page = st.navigation(
+        [
+            st.Page("app_pages/correction.py", title="Laser breaks correction", icon=":material/tune:"),
+            st.Page("app_pages/visualisation.py", title="Map visualisation", icon=":material/map:"),
+        ],
+        position="top",
+    )
+    selected_page.run()
+    st.stop()
+
+st.title('IR spectra processing')
+
+if page == "correction":
+    correction_import_tab, correction_manipulation_tab = st.tabs(["Data import", "Data manipulation"])
+    correction_import_tab.__enter__()
     c1,c2,c3,c4 = st.columns(4)
-    with c1 : system = st.radio('Choose the system', ['GloveBox', 'IconIR', 'Mirage', 'Nano IR2'], key='system')
+    if st.session_state.get('system') == 'GloveBox': st.session_state.system = 'IconIR'
+    with c1 : system = st.radio('Choose the system', ['IconIR', 'Mirage', 'Nano IR2'], key='system')
     with c2 : divided = st.radio('Spectra are already divided by the background', [True, False], key='divided')
     if system =='Mirage' :
         multiple_file=False
@@ -503,22 +468,23 @@ with correctionTab:
             with c5 : st.session_state.spectra_files = st.file_uploader("Import your IR file", accept_multiple_files=multiple_file, type=extension)
             with c6 : st.session_state.bkg_files = st.file_uploader("Import your background file", accept_multiple_files=False, type=['series', 'txt', 'csv'])
             st.form_submit_button('Submit')
+
+    if st.session_state.spectra_files is not None and st.session_state.bkg_files is not None:
+        st.success("Data imported successfully. Go to the 'Data manipulation' tab.")
+    correction_import_tab.__exit__(None, None, None)
+    correction_manipulation_tab.__enter__()
     
     if (st.session_state.spectra_files==None) or (st.session_state.bkg_files==None) : pass
     else :
-        if system == 'GloveBox' or system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_GloveBox(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg, st.session_state.header_bkg = Open_bkg_GloveBox(st.session_state.bkg_files)
-        elif system == 'Nano IR2': st.session_state.Spec, st.session_state.header_spec = Open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg, st.session_state.header_bkg = Open_spectrum_nano2(st.session_state.bkg_files)
-        elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = Open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)    
+        if system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = open_spectrum_glove_box(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg, st.session_state.header_bkg = open_background_glove_box(st.session_state.bkg_files)
+        elif system == 'Nano IR2': st.session_state.Spec, st.session_state.header_spec = open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg, st.session_state.header_bkg = open_spectrum_nano2(st.session_state.bkg_files)
+        elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)
         
         if len(st.session_state.Bkg)>st.session_state.Spec.shape[0] : st.session_state.Bkg = np.array([i for i in st.session_state.Bkg if i[0] in st.session_state.Spec[:,0]])
         c_l, c_m, c_mif, c_r,c_rif = st.columns([0.2,0.15,0.15,0.15,0.4], gap='xxsmall')        
         with c_l:
-            if system == 'GloveBox' :
-                breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1389,989]).replace(']', '').replace('[', ''), str([1402,989]).replace(']', '').replace('[', ''), 'Other'])
-                if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
-                else : st.session_state.breaks_values_enter = breaks_values
-            elif system == 'IconIR' :
-                breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1706,1411,1209]).replace(']', '').replace('[', ''), str([1390,990]).replace(']', '').replace('[', ''), str([1390,1371,990,980]).replace(']', '').replace('[', ''), 'Other'])
+            if system == 'IconIR' :
+                breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1389,989]).replace(']', '').replace('[', ''), str([1402,989]).replace(']', '').replace('[', ''), str([1706,1411,1209]).replace(']', '').replace('[', ''), str([1390,990]).replace(']', '').replace('[', ''), str([1390,1371,990,980]).replace(']', '').replace('[', ''), 'Other'])
                 if breaks_values == 'Other': st.session_state.breaks_values_enter = st.text_input('Please enter the value(s) (in cm-1). If multiple values, separate them with a comma.', value = str(System_breaks_predefined[system]).replace(']', '').replace('[', ''))
                 else : st.session_state.breaks_values_enter = breaks_values
             elif system == 'Mirage' :
@@ -567,7 +533,16 @@ with correctionTab:
      
         spectra_test_selection = st.selectbox('Spectra to use for the test',st.session_state.header_spec.split(',')[1:])      
         idx_selection = [idx for idx in range(len(st.session_state.header_spec.split(','))) if st.session_state.header_spec.split(',')[idx] == spectra_test_selection][0]
-        st.session_state.spectra_test = Spectrum_correction(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg, 'Wavenumber (cm-1),After', st.session_state.header_bkg, st.session_state.system, st.session_state.off_app_bkg, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided= st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)    
+        correction_config = SpectrumCorrectionConfig(
+            apply_offset=st.session_state.off_app_bkg,
+            offset_wavenumber=st.session_state.off_bkg,
+            break_values=st.session_state.breaks_values_use,
+            spectra_divided=st.session_state.divided,
+            smooth_background=st.session_state.bkg_smoothed,
+            background_window=st.session_state.window_bkg,
+            background_polynomial_order=st.session_state.polynom_order_bkg,
+        )
+        st.session_state.spectra_test = correct_spectra(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg, 'Wavenumber (cm-1),After', correction_config, n_delta=2)
         st.session_state.spectra_test['Before'] = st.session_state.Spec[:, idx_selection]        
         fig_before = px.line(st.session_state.spectra_test, color_discrete_sequence=['blue','red'])
         fig_before.update_layout(title_text = 'Before vs after break correction', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_before.update_xaxes(autorange="reversed")
@@ -575,7 +550,7 @@ with correctionTab:
         c11, c12 = st.columns(2)
         with c11 : correct = st.button('Correct the laser break !')
         with c12 : container = st.container()
-        if correct : st.session_state.spectra_corrected = Spectrum_correction(st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg, st.session_state.system, st.session_state.off_app_bkg, st.session_state.off_bkg, st.session_state.breaks_values_use, n_delta=2, Bkg_divided=st.session_state.divided, bkg_smoothing = st.session_state.bkg_smoothed)
+        if correct : st.session_state.spectra_corrected = correct_spectra(st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, correction_config, n_delta=2)
         if 'spectra_corrected' in st.session_state :
             with container.form('Save_form') :
                 st.text_input('Enter the file path :', key='savepath')
@@ -590,63 +565,71 @@ with correctionTab:
             fig.update_xaxes(autorange="reversed")
             st.plotly_chart(fig)
 
-with visuTab :
-    with st.expander('Upload necessary files', expanded=True):
-        st.write("For the code to be able to work successfully, you need to upload the measurment files and the topo/IR map that corresponds to the spectra you want to study. You can import only ONE topography and/or IR map.")
-        c1,c2 = st.columns(2) ; c3,c4 = st.columns(2)
-        with c1:
-            with st.form("Spectra", clear_on_submit=True):
-                spectra_files = st.file_uploader("Import all spectra files", accept_multiple_files=True, type=['csv', 'series'], help="Upload your spectra file (.csv or .series). Don't upload multiple extension at the same type.")
-                submitted = st.form_submit_button("Submit")
-                if submitted and spectra_files is not None:
-                    if spectra_files[0].name.endswith('csv'):
-                        st.session_state.spec_file=[pd.read_csv(i, index_col=0) for i in spectra_files]
-                        if len(st.session_state['spec_file']) > 1 : st.session_state.spectra_initial = pd.concat(st.session_state.spec_file, axis=1).T
-                        else : st.session_state.spectra_initial = st.session_state.spec_file[0].T
-                    else :
-                        st.session_state.spectra_initial = pd.concat([Open_series(i) for i in spectra_files], axis=1).T.drop_duplicates(keep='first')
-                        st.session_state.spectra_initial.columns=st.session_state.spectra_initial.iloc[0]
-                        st.session_state.spectra_initial = st.session_state.spectra_initial.drop(labels = 'Wavenumber (cm-1)', axis=0)
-                    if 'Spectrum.' in st.session_state.spectra_initial.index[0]: st.session_state.spectra_initial.index = [int(i.split('.')[1]) for i in st.session_state.spectra_initial.index]
-                    else : st.session_state.spectra_initial.index = [int(re.sub(r"\D", "",i.split('.')[-1])) for i in st.session_state.spectra_initial.index]
-                    st.session_state.spectra_initial = st.session_state.spectra_initial.sort_index()
-                    st.session_state.spectra_initial.index.names = ['Spectrum No']
-                    st.session_state.spectra = st.session_state.spectra_initial.copy()  
-                    st.session_state.to_plot=np.array([]); st.session_state.spectra_submit=True
-                    st.session_state.wavenumber = st.session_state.spectra.columns.values
-        with c2:
-            with st.form("Positions", clear_on_submit=True):
-                positions_files = st.file_uploader("Import all measurements files", accept_multiple_files=True, type='xml', help="Upload the measurements files corresponding to your spectra. They can be found in the different subfolder of the folder 'IRMeasurement', under the name '[subfolder-name].Measurement.xml'")
-                submitted = st.form_submit_button("Submit")
-                if submitted and positions_files is not None:
-                    st.session_state.pos_file = [get_positions(i) for i in positions_files]
-                    if len(st.session_state.pos_file) > 1 : st.session_state.positions = pd.concat([i[0] for i in st.session_state.pos_file], axis=0)
-                    else : st.session_state.positions = st.session_state.pos_file[0][0]
-                    st.session_state.positions = st.session_state.positions.set_index('Spectrum No')
-                    st.session_state.positions = st.session_state.positions.sort_values('Spectrum No').drop_duplicates()
-                    st.session_state.map_size, st.session_state.map_unit = st.session_state.pos_file[0][1:]
-                    st.session_state.positions_submit=True         
-        with c3 :
-            with st.form("Topomap", clear_on_submit=True):
-                topo_file = st.file_uploader("Import the topography", type=['txt','csv','png','tiff'], help='You may find a .png file in the same folder you have found the measurment file.')
-                submitted = st.form_submit_button("Submit")
-                if submitted and topo_file is not None:
-                    if topo_file.name.endswith('.csv'): st.session_state['Topography'] = pd.read_csv(topo_file); st.session_state['Topography_image'] = False
-                    elif topo_file.name.endswith('.png') : st.session_state['Topography'] = cv2.imdecode(np.asarray(bytearray(topo_file.read()), dtype=np.uint8), 1); st.session_state['Topography_image'] = True
-                    elif topo_file.name.endswith('.tiff') or topo_file.name.endswith('.tif'): st.session_state['Topography'] = io.imread(topo_file); st.session_state['Topography_image'] = True
-                    elif topo_file.name.endswith('.txt'): st.session_state['Topography'] = np.loadtxt(topo_file, delimiter=';'); st.session_state['Topography_image'] = False
-                    st.session_state.topo_submit=True
-        with c4 :
-            with st.form("IRmap", clear_on_submit=True):
-                IR_file = st.file_uploader("Import the IR map", type=['txt','csv','png','tiff'])
-                submitted = st.form_submit_button("Submit")
-                if submitted and IR_file is not None:
-                    if IR_file.name.endswith('.png'): st.session_state['IR'] = cv2.imdecode(np.asarray(bytearray(IR_file.read()), dtype=np.uint8), 1); st.session_state['IR_image'] = True
-                    elif IR_file.name.endswith('.csv'): st.session_state['IR'] = pd.read_csv(IR_file); st.session_state['IR_image'] = False
-                    elif IR_file.name.endswith('.tiff') or IR_file.name.endswith('.tif'): st.session_state['IR'] = io.imread(IR_file); st.session_state['IR_image'] = True
-                    elif IR_file.name.endswith('.txt'): st.session_state['IR'] = np.loadtxt(IR_file, delimiter=';'); st.session_state['IR_image'] = False
-                    st.session_state.IR_submit=True
-        st.write('Size of the map (topography and/or IR) : ',str(st.session_state.map_size[0]),'x',str(st.session_state.map_size[1]),' ',st.session_state.map_unit)
+    correction_manipulation_tab.__exit__(None, None, None)
+
+if page == "visualisation":
+    visualisation_import_tab, visualisation_manipulation_tab, visualisation_statistics_tab = st.tabs(["Data import", "Data manipulation", "Data statistic"])
+    visualisation_import_tab.__enter__()
+    st.write("For the code to be able to work successfully, you need to upload the measurment files and the topo/IR map that corresponds to the spectra you want to study. You can import only ONE topography and/or IR map.")
+    c1,c2 = st.columns(2) ; c3,c4 = st.columns(2)
+    with c1:
+        with st.form("Spectra", clear_on_submit=True):
+            spectra_files = st.file_uploader("Import all spectra files", accept_multiple_files=True, type=['csv', 'series'], help="Upload your spectra file (.csv or .series). Don't upload multiple extension at the same type.")
+            submitted = st.form_submit_button("Submit")
+            if submitted and spectra_files is not None:
+                if spectra_files[0].name.endswith('csv'):
+                    st.session_state.spec_file=[pd.read_csv(i, index_col=0) for i in spectra_files]
+                    if len(st.session_state['spec_file']) > 1 : st.session_state.spectra_initial = pd.concat(st.session_state.spec_file, axis=1).T
+                    else : st.session_state.spectra_initial = st.session_state.spec_file[0].T
+                else :
+                    st.session_state.spectra_initial = pd.concat([open_series(i) for i in spectra_files], axis=1).T.drop_duplicates(keep='first')
+                    st.session_state.spectra_initial.columns=st.session_state.spectra_initial.iloc[0]
+                    st.session_state.spectra_initial = st.session_state.spectra_initial.drop(labels = 'Wavenumber (cm-1)', axis=0)
+                if 'Spectrum.' in st.session_state.spectra_initial.index[0]: st.session_state.spectra_initial.index = [int(i.split('.')[1]) for i in st.session_state.spectra_initial.index]
+                else : st.session_state.spectra_initial.index = [int(re.sub(r"\D", "",i.split('.')[-1])) for i in st.session_state.spectra_initial.index]
+                st.session_state.spectra_initial = st.session_state.spectra_initial.sort_index()
+                st.session_state.spectra_initial.index.names = ['Spectrum No']
+                st.session_state.spectra = st.session_state.spectra_initial.copy()  
+                st.session_state.to_plot=np.array([]); st.session_state.spectra_submit=True
+                st.session_state.wavenumber = st.session_state.spectra.columns.values
+    with c2:
+        with st.form("Positions", clear_on_submit=True):
+            positions_files = st.file_uploader("Import all measurements files", accept_multiple_files=True, type='xml', help="Upload the measurements files corresponding to your spectra. They can be found in the different subfolder of the folder 'IRMeasurement', under the name '[subfolder-name].Measurement.xml'")
+            submitted = st.form_submit_button("Submit")
+            if submitted and positions_files is not None:
+                st.session_state.pos_file = [get_positions(i) for i in positions_files]
+                if len(st.session_state.pos_file) > 1 : st.session_state.positions = pd.concat([i[0] for i in st.session_state.pos_file], axis=0)
+                else : st.session_state.positions = st.session_state.pos_file[0][0]
+                st.session_state.positions = st.session_state.positions.set_index('Spectrum No')
+                st.session_state.positions = st.session_state.positions.sort_values('Spectrum No').drop_duplicates()
+                st.session_state.map_size, st.session_state.map_unit = st.session_state.pos_file[0][1:]
+                st.session_state.positions_submit=True         
+    with c3 :
+        with st.form("Topomap", clear_on_submit=True):
+            topo_file = st.file_uploader("Import the topography", type=['txt','csv','png','tiff'], help='You may find a .png file in the same folder you have found the measurment file.')
+            submitted = st.form_submit_button("Submit")
+            if submitted and topo_file is not None:
+                if topo_file.name.endswith('.csv'): st.session_state['Topography'] = pd.read_csv(topo_file); st.session_state['Topography_image'] = False
+                elif topo_file.name.endswith('.png') : st.session_state['Topography'] = cv2.imdecode(np.asarray(bytearray(topo_file.read()), dtype=np.uint8), 1); st.session_state['Topography_image'] = True
+                elif topo_file.name.endswith('.tiff') or topo_file.name.endswith('.tif'): st.session_state['Topography'] = io.imread(topo_file); st.session_state['Topography_image'] = True
+                elif topo_file.name.endswith('.txt'): st.session_state['Topography'] = np.loadtxt(topo_file, delimiter=';'); st.session_state['Topography_image'] = False
+                st.session_state.topo_submit=True
+    with c4 :
+        with st.form("IRmap", clear_on_submit=True):
+            IR_file = st.file_uploader("Import the IR map", type=['txt','csv','png','tiff'])
+            submitted = st.form_submit_button("Submit")
+            if submitted and IR_file is not None:
+                if IR_file.name.endswith('.png'): st.session_state['IR'] = cv2.imdecode(np.asarray(bytearray(IR_file.read()), dtype=np.uint8), 1); st.session_state['IR_image'] = True
+                elif IR_file.name.endswith('.csv'): st.session_state['IR'] = pd.read_csv(IR_file); st.session_state['IR_image'] = False
+                elif IR_file.name.endswith('.tiff') or IR_file.name.endswith('.tif'): st.session_state['IR'] = io.imread(IR_file); st.session_state['IR_image'] = True
+                elif IR_file.name.endswith('.txt'): st.session_state['IR'] = np.loadtxt(IR_file, delimiter=';'); st.session_state['IR_image'] = False
+                st.session_state.IR_submit=True
+    st.write('Size of the map (topography and/or IR) : ',str(st.session_state.map_size[0]),'x',str(st.session_state.map_size[1]),' ',st.session_state.map_unit)
+
+    if st.session_state.spectra_submit and st.session_state.positions_submit and (st.session_state.topo_submit or st.session_state.IR_submit):
+        st.success("Data imported successfully. Go to the 'Data manipulation' tab.")
+    visualisation_import_tab.__exit__(None, None, None)
+    visualisation_manipulation_tab.__enter__()
     
     if (st.session_state.topo_submit==False and st.session_state.IR_submit==False) or st.session_state.spectra_submit==False or st.session_state.positions_submit==False : pass
     else :
@@ -976,38 +959,6 @@ with visuTab :
             # Plot the spectra
             st.plotly_chart(spectra, width='content')
 
-        # #### AI-ASSISTED BLOCK START [Google-Gemini | 2026-09-01 | no external source code copied]
-        # AI intent: Extract peaks from pre-derived SG spectra via strict first-derivative zero-crossing, safely handle empty selections, and render a frequency histogram                
-            if 'df_final' in st.session_state and not st.session_state.df_final.empty :
-                if st.button('Get IR bands distribution by 1st derivative', help='This button will extract the peaks from the first derivative of the spectra and plot a histogram showing the frequency of occurrence of each peak across all selected spectra. For that, it search the sign change to find the peaks.', key='extract_peaks'):
-                    if (st.session_state.savgol_operation) & ('deriv' in st.session_state): st.session_state.df_deriv_1 = st.session_state.df_final
-                    else: savgol_params()
-                if ('df_deriv_1' in st.session_state) & (not st.session_state.df_deriv_1.empty):
-                    peaks_per_spectrum = extract_peaks_from_first_derivative(st.session_state.df_deriv_1)
-                    all_peaks_list = []
-                    for peak_list in peaks_per_spectrum.values(): all_peaks_list.extend(peak_list)
-                    df_total_peaks = pd.DataFrame({"Wavenumber": all_peaks_list})
-                    if not df_total_peaks.empty:
-                        st.subheader(f"📊 Peak Distribution ({len(np.unique(df_total_peaks))} peaks found across {len(st.session_state.df_final.columns)} spectra)" )
-
-                        # Generate interactive Plotly histogram
-                        fig = px.histogram(
-                            df_total_peaks,
-                            x="Wavenumber",
-                            title="Peak Occurrence Frequency per Wavenumber (cm⁻¹)",
-                            labels={
-                                "Wavenumber": "Wavenumber (cm⁻¹)",
-                                "count": "Number of Spectra",
-                            },
-                            color_discrete_sequence=["#0a9383"],
-                        )
-                        fig.update_traces(xbins=dict(start=xright, end=xleft, size=1))
-                        fig.update_layout(xaxis_title="Wavenumber (cm⁻¹)", yaxis_title="Number of Spectra with this Peak", bargap=0.05, hovermode="x unified", height=st.session_state.height_spec, width=st.session_state.width_spec)
-                        fig.update_xaxes(range=[xleft, xright])
-                        st.plotly_chart(fig, width='content')
-                    else:
-                        st.warning("⚠️ No peaks detected in the provided DataFrame.")
-
         else:
             st.warning("No spectra are currently selected. Please select at least one spectrum to apply the correction and plot the data.")
             st.session_state.df_toplot = pd.DataFrame()
@@ -1037,3 +988,11 @@ with visuTab :
                 if st.button('Save map figure as html') : dots.write_html(savepath +'/' + Name + '_'+ st.session_state.map +'_map' + '.html')
             with cfigIR:
                 if st.button('Save IR spectra figure as html') : spectra.write_html(savepath +'/' + Name + '_spectra' + '.html')
+
+    visualisation_manipulation_tab.__exit__(None, None, None)
+    visualisation_statistics_tab.__enter__()
+    if 'xleft' in locals() and 'xright' in locals():
+        render_peak_statistics(xleft, xright)
+    else:
+        st.info("Import and prepare spectra in the 'Data manipulation' tab first.")
+    visualisation_statistics_tab.__exit__(None, None, None)
