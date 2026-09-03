@@ -4,9 +4,82 @@ Created on Wed Feb 19 10:39:46 2025
 @break correction : julien rojas
 @application: carla collange
 """
-# %% Packages
-
+#%% Environment check
+import importlib.util
+import re
+from pathlib import Path
 import streamlit as st
+
+IMPORT_MAPPING = {
+    "pyperspec": "pyspc",
+    "opencv-python": "cv2",
+    "scikit-learn": "sklearn",
+    "scikit-image": "skimage",}
+
+def check_local_environment(file_path="requirements.txt"):
+    req_file = Path(file_path)
+    if not req_file.exists():
+        return True, ""
+    missing_packages = []
+    with open(req_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("-e"): continue
+            if "github.com" in line: # Extract package name from GitHub URL or standard requirement
+                match_url = re.search(r"/([^/]+?)(?:\.git)?\s*$", line)
+                package_name = (match_url.group(1).lower().replace("_", "-") if match_url else None)
+            else:
+                match_std = re.match(r"^([a-zA-Z0-9_\-\[\]]+)", line)
+                package_name = (match_std.group(1).split("[")[0].lower().replace("_", "-") if match_std else None)
+            if not package_name: continue
+            import_name = IMPORT_MAPPING.get(package_name, package_name) # Convert package name to its real import name (e.g., pyperspec -> pyspc)
+            if importlib.util.find_spec(import_name) is None: missing_packages.append(package_name) # Test if the module can be imported safely
+        if missing_packages:
+            return False, f"Missing modules: {', '.join(missing_packages)}"
+        return True, ""
+
+# Checking
+is_ok, error_details = check_local_environment()
+
+if not is_ok:
+    st.error("⚠️ **Your Local Environment is Out of Date!**")
+    st.sidebar.error(f"Details: {error_details}")
+
+    st.markdown(
+        f"""
+        The environment does not corresponds to the last update of the GitHub repository. Please update your environment before running the app.
+        
+        ### 🛠️ How to Update:
+        
+        **For Anaconda Users:**
+        1. Open the **Anaconda Prompt**.
+        2. Activate your specific environment for this app:
+            '''bash
+            conda activate <your_environment_name>
+            '''
+        3. Navigate to this project directory and run:
+            '''bash
+            pip install -r requirements.txt
+            '''
+        
+        **For Standard Terminal Users:**
+        1. Open your terminal.
+        2. Activate your virtual environment (if applicable).
+        3. Run:
+            '''bash
+            pip install -r requirements.txt
+            '''
+        
+        Once the installation is complete, close and **restart your Streamlit server**.
+        
+        ⚠️ Those will work only if :
+        - You have the latest requirements.txt, available at https://github.com/CarlaC08/AFM-IR_spectra_processing/blob/main/requirements.txt
+        - The requirements.txt file is in the same folder as the IR_spectra_processing script
+        """
+    )
+    st.stop()
+
+# %% Packages
 import plotly.express as px
 from streamlit_plotly_events import plotly_events
 import numpy as np
@@ -15,9 +88,8 @@ import pandas as pd
 from itertools import cycle
 import cv2
 import plotly.graph_objects as go
-from plotly.validators.scatter.marker import SymbolValidator
+from plotly.validator_cache import ValidatorCache
 import seaborn as sns
-import re
 from sklearn.preprocessing import normalize
 import os as os
 from skimage import io
@@ -36,12 +108,11 @@ from spectra_correction import SpectrumCorrectionConfig, correct_spectra, find_n
 try: import pyspc  # from https://github.com/r-hyperspec/pyperspec
 except ImportError: pyspc = None
 # #### AI-ASSISTED BLOCK END
-
 #%% Variable definitions
 
 initialize_session_state()
 st.session_state.colorscales = [i for j in [[k, k+'_r'] for k in px.colors.named_colorscales()] for i in j]
-symbols_names = [i for i in SymbolValidator().values[2::3] if '-dot' not in i]
+symbols_names = ValidatorCache.get_validator("scatter.marker", "symbol").values[2::3]
 ls_option = ['dash', 'dashdot', 'dot', 'longdash', 'longdashdot', 'solid']
 if 'normalization' not in st.session_state : st.session_state.normalization = 'None'
 if 'arrow_color' not in st.session_state : st.session_state.arrow_color = "#FFFFFF"
@@ -473,7 +544,6 @@ if page == "correction":
         st.success("Data imported successfully. Go to the 'Data manipulation' tab.")
     correction_import_tab.__exit__(None, None, None)
     correction_manipulation_tab.__enter__()
-    
     if (st.session_state.spectra_files==None) or (st.session_state.bkg_files==None) : pass
     else :
         if system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = open_spectrum_glove_box(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg, st.session_state.header_bkg = open_background_glove_box(st.session_state.bkg_files)
@@ -481,7 +551,7 @@ if page == "correction":
         elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)
         
         if len(st.session_state.Bkg)>st.session_state.Spec.shape[0] : st.session_state.Bkg = np.array([i for i in st.session_state.Bkg if i[0] in st.session_state.Spec[:,0]])
-        c_l, c_m, c_mif, c_r,c_rif = st.columns([0.2,0.15,0.15,0.15,0.4], gap='xxsmall')        
+        c_l, c_m, c_mif, c_r, c_rif = st.columns([0.2,0.15,0.15,0.15,0.4], gap='xxsmall')        
         with c_l:
             if system == 'IconIR' :
                 breaks_values = st.radio('What are the values of laser breaks (cm-1) ?', [str([1389,989]).replace(']', '').replace('[', ''), str([1402,989]).replace(']', '').replace('[', ''), str([1706,1411,1209]).replace(']', '').replace('[', ''), str([1390,990]).replace(']', '').replace('[', ''), str([1390,1371,990,980]).replace(']', '').replace('[', ''), 'Other'])
