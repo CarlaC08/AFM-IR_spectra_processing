@@ -4,7 +4,6 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-import streamlit as st
 from scipy.signal import savgol_filter
 
 
@@ -61,41 +60,49 @@ class SpectrumCorrectionConfig:
     background_polynomial_order: Optional[int] = None
 
 
-@st.cache_data(ttl=3600, max_entries=1, show_spinner="Break correction")
-def correct_spectra(spectra, background, spectra_header, config, n_delta=2):
+def correct_spectra(spectra, background, spectra_header, config, n_delta=2, background_new=None):
+    background_for_multiplication = background
+    background_for_division = background if background_new is None else background_new
+
     corrected_spectra = deepcopy(spectra)
     break_indices = [int(find_nearest_idx(spectra[:, 0], value)) for value in config.break_values]
     if config.smooth_background:
         break_indices.sort()
-        smoothed_background = background.copy()
+        smoothed_background = background_for_division.copy()
         for index in range(len(break_indices)):
             try:
                 smoothed_background[break_indices[index]:break_indices[index + 1], 1] = savgol_filter(
-                    background[break_indices[index]:break_indices[index + 1], 1],
+                    background_for_division[break_indices[index]:break_indices[index + 1], 1],
                     config.background_window,
                     config.background_polynomial_order,
                 )
-                smoothed_background[break_indices[index]] = background[break_indices[index]]
-                smoothed_background[break_indices[index + 1]] = background[break_indices[index + 1]]
+                smoothed_background[break_indices[index]] = background_for_division[break_indices[index]]
+                smoothed_background[break_indices[index + 1]] = background_for_division[break_indices[index + 1]]
             except IndexError:
                 pass
             except ValueError:
                 if break_indices[index + 1] - break_indices[index] < config.background_window:
                     smoothed_background[break_indices[index]:break_indices[index + 1], 1] = savgol_filter(
-                        background[break_indices[index]:break_indices[index + 1], 1],
+                        background_for_division[break_indices[index]:break_indices[index + 1], 1],
                         break_indices[index + 1] - break_indices[index] - 1,
                         config.background_polynomial_order,
                     )
-                    smoothed_background[break_indices[index]] = background[break_indices[index]]
-                    smoothed_background[break_indices[index + 1]] = background[break_indices[index + 1]]
-        smoothed_background[break_indices[-1] + 1:, 1] = savgol_filter(background[break_indices[-1] + 1:, 1], 15, 1)
+                    smoothed_background[break_indices[index]] = background_for_division[break_indices[index]]
+                    smoothed_background[break_indices[index + 1]] = background_for_division[break_indices[index + 1]]
+        smoothed_background[:break_indices[0], 1] = savgol_filter(
+            background_for_division[:break_indices[0], 1],
+            config.background_window,
+            config.background_polynomial_order,
+        )
+        smoothed_background[break_indices[0]] = background_for_division[break_indices[0]]
+        smoothed_background[break_indices[-1] + 1:, 1] = savgol_filter(background_for_division[break_indices[-1] + 1:, 1], 15, 1)
     else:
-        smoothed_background = background.copy()
+        smoothed_background = background_for_division.copy()
 
     for column_index in np.arange(1, spectra.shape[1], 1):
         current_spectrum = spectra[:, (0, column_index)]
         if config.spectra_divided:
-            current_spectrum = uncorrect_background(current_spectrum, background)
+            current_spectrum = uncorrect_background(current_spectrum, background_for_multiplication)
         corrected_spectrum = offset_background_correction(
             current_spectrum,
             smoothed_background,

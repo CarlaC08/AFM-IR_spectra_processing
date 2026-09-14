@@ -514,12 +514,12 @@ if page == "correction":
                 else :
                     c9,c10 = st.columns(2)
                     with c9 : st.session_state.spectra_files = st.file_uploader("Import your IR file", accept_multiple_files=False, type=['csv', 'txt'])
-                    with c10 : st.session_state.bkg_files = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'txt'])
+                    with c10 : st.session_state.bkg_files_old = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'txt'])
             else :
                 st.session_state.bkg_in_file, st.session_state.organisation = 'No', 'Row' 
                 c9,c10 = st.columns(2)
                 with c9 : st.session_state.spectra_files = st.file_uploader("Import your IR file", accept_multiple_files=False, type=['csv', 'txt'])
-                with c10 : st.session_state.bkg_files = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'txt'])  
+                with c10 : st.session_state.bkg_files_old = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'txt'])  
             st.form_submit_button('Submit')
                 
     elif system =='Nano IR2' :
@@ -527,30 +527,33 @@ if page == "correction":
         with  st.form('Nano2_file', clear_on_submit=True) :
             c5,c6 = st.columns(2)
             with c5 : st.session_state.spectra_files = st.file_uploader("Import your IR file", accept_multiple_files=False, type=['csv', 'txt'])
-            with c6 : st.session_state.bkg_files = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'irb', 'txt'])
+            with c6 : st.session_state.bkg_files_old = st.file_uploader("Import your background file", accept_multiple_files=False, type=['csv', 'irb', 'txt'])
             st.form_submit_button('Submit')
 
     else :
-        with c3 : extension = st.radio('Select the extension type of the SPECTRA files', ['series', 'txt/csv']).split('/')
+        extension = c3.radio('Select the extension type of the SPECTRA files', ['series', 'txt/csv']).split('/')
         if extension==['series']: multiple_file=True
         else : multiple_file=False
+        bkg_new = c4.radio('Do you want to correct by another background ?', [False, True], format_func= lambda x: "Yes" if x else "No", key='bkg_new')
         with  st.form('IconIR_file', clear_on_submit=True) :
             c5,c6 = st.columns(2)
-            with c5 : st.session_state.spectra_files = st.file_uploader("Import your IR file", accept_multiple_files=multiple_file, type=extension)
-            with c6 : st.session_state.bkg_files = st.file_uploader("Import your background file", accept_multiple_files=False, type=['series', 'txt', 'csv'])
+            st.session_state.spectra_files = c5.file_uploader("Import your IR file", accept_multiple_files=multiple_file, type=extension)
+            if bkg_new==True :
+                st.session_state.bkg_files_old = c6.file_uploader("Import your OLD background file)", accept_multiple_files=False, type=['series', 'txt', 'csv'], help="Import the background you already divided your spectra with.")
+                st.session_state.bkg_files_new = c6.file_uploader("Import your NEW background file", accept_multiple_files=False, type=['series', 'txt', 'csv'], help="Import the background you want to divide your spectra with.")
+            else : st.session_state.bkg_files_new = c6.file_uploader("Import your background file", accept_multiple_files=False, type=['series', 'txt', 'csv'], help=("Import the background you want to divide your spectra with." if divided==False else "Import the background you already divided your spectra with."))
             st.form_submit_button('Submit')
 
-    if st.session_state.spectra_files is not None and st.session_state.bkg_files is not None:
+    if st.session_state.spectra_files is not None and st.session_state.bkg_files_old is not None:
         st.success("Data imported successfully. Go to the 'Data manipulation' tab.")
     correction_import_tab.__exit__(None, None, None)
     correction_manipulation_tab.__enter__()
-    if (st.session_state.spectra_files==None) or (st.session_state.bkg_files==None) : pass
+    if (st.session_state.spectra_files==None) or (st.session_state.bkg_files_new==None) or (st.session_state.bkg_files_old==None) : pass
     else :
-        if system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = open_spectrum_glove_box(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg, st.session_state.header_bkg = open_background_glove_box(st.session_state.bkg_files)
-        elif system == 'Nano IR2': st.session_state.Spec, st.session_state.header_spec = open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg, st.session_state.header_bkg = open_spectrum_nano2(st.session_state.bkg_files)
-        elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, st.session_state.header_bkg = open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)
-        
-        if len(st.session_state.Bkg)>st.session_state.Spec.shape[0] : st.session_state.Bkg = np.array([i for i in st.session_state.Bkg if i[0] in st.session_state.Spec[:,0]])
+        if system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = open_spectrum_glove_box(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg_old, st.session_state.header_bkg_old = open_background_glove_box(st.session_state.bkg_files_old); st.session_state.Bkg_new, st.session_state.header_bkg_new = open_background_glove_box(st.session_state.bkg_files_new)
+        elif system == 'Nano IR2': st.session_state.Spec, st.session_state.header_spec = open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg_old, st.session_state.header_bkg_old = open_spectrum_nano2(st.session_state.bkg_files_old)
+        elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg_old, st.session_state.header_spec, st.session_state.header_bkg_old = open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files_old, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)
+        if len(st.session_state.Bkg_old)>st.session_state.Spec.shape[0] : st.session_state.Bkg_old = np.array([i for i in st.session_state.Bkg_old if i[0] in st.session_state.Spec[:,0]])
         c_l, c_m, c_mif, c_r, c_rif = st.columns([0.2,0.15,0.15,0.15,0.4], gap='xxsmall')        
         with c_l:
             if system == 'IconIR' :
@@ -578,28 +581,51 @@ if page == "correction":
             with c_rif.expander("Savitsky-Golay Filter parameters"):
                 c_wl, c_pol = st.columns(2)
                 st.session_state.window_bkg = c_wl.number_input("Window length", min_value=3, step=2, value=55); st.session_state.polynom_order_bkg = c_pol.number_input('Polynome order', min_value=1, step=1, value=1)
-        with st.expander('Show the background'):
+        with st.expander('Show the old background'):
             if bkg_smoothed==True:
-                i_Break = [int(find_nearest_idx(st.session_state.Bkg[:,0], i)) for i in st.session_state.breaks_values_use]
+                i_Break = [int(find_nearest_idx(st.session_state.Bkg_old[:,0], i)) for i in st.session_state.breaks_values_use]
                 i_Break.sort()
-                bkg_new = st.session_state.Bkg.copy()
+                bkg_new = st.session_state.Bkg_old.copy()
                 for i in range(len(i_Break)) :
-                    try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] =  st.session_state.Bkg[i_Break[i]]; bkg_new[i_Break[i+1]] =  st.session_state.Bkg[i_Break[i+1]]
+                    try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg_old[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] =  st.session_state.Bkg_old[i_Break[i]]; bkg_new[i_Break[i+1]] =  st.session_state.Bkg_old[i_Break[i+1]]
                     except IndexError : pass
                     except ValueError :
-                        if i_Break[i+1]-i_Break[i] < st.session_state.window_bkg : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg[i_Break[i]:i_Break[i+1],1],i_Break[i+1]-i_Break[i]-1,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] = st.session_state.Bkg[i_Break[i]]; bkg_new[i_Break[i+1]] = st.session_state.Bkg[i_Break[i+1]]
-
+                        if i_Break[i+1]-i_Break[i] < st.session_state.window_bkg : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg_old[i_Break[i]:i_Break[i+1],1],i_Break[i+1]-i_Break[i]-1,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] = st.session_state.Bkg_old[i_Break[i]]; bkg_new[i_Break[i+1]] = st.session_state.Bkg_old[i_Break[i+1]]
+                bkg_new[:i_Break[0],1] = savgol_filter(st.session_state.Bkg_old[:i_Break[0],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); bkg_new[i_Break[0]] = st.session_state.Bkg_old[i_Break[0]]
                 bkg_new[i_Break[-1]+1:,1] = savgol_filter(bkg_new[i_Break[-1]+1:,1],15,1)
-                bkg_mix = st.session_state.Bkg.T.tolist()
+                bkg_mix = st.session_state.Bkg_old.T.tolist()
                 bkg_mix.append(bkg_new[:,1].tolist())
                 test_bkg_mix=pd.DataFrame(bkg_mix,index=['Wavenumber', 'Before', 'After']).T.set_index('Wavenumber')
                 fig_bkg_test = px.line(test_bkg_mix, color_discrete_sequence=['blue','red'])
                 fig_bkg_test.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg_test.update_xaxes(autorange="reversed")
-                st.plotly_chart(fig_bkg_test)
+                st.plotly_chart(fig_bkg_test, key='fig_bkg_test_old_smoothed')
             else :
-                fig_bkg = px.line(st.session_state.Bkg, x=0, y=1)
+                fig_bkg = px.line(st.session_state.Bkg_old, x=0, y=1)
                 fig_bkg.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg.update_xaxes(autorange="reversed")
-                st.plotly_chart(fig_bkg)
+                st.plotly_chart(fig_bkg, key='fig_bkg_test_old')
+        if 'Bkg_new' in st.session_state :
+            with st.expander('Show the new background'):
+                if bkg_smoothed==True:
+                    i_Break = [int(find_nearest_idx(st.session_state.Bkg_new[:,0], i)) for i in st.session_state.breaks_values_use]
+                    i_Break.sort()
+                    bkg_new = st.session_state.Bkg_new.copy()
+                    for i in range(len(i_Break)) :
+                        try : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg_new[i_Break[i]:i_Break[i+1],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] =  st.session_state.Bkg_new[i_Break[i]]; bkg_new[i_Break[i+1]] =  st.session_state.Bkg_new[i_Break[i+1]]
+                        except IndexError : pass
+                        except ValueError :
+                            if i_Break[i+1]-i_Break[i] < st.session_state.window_bkg : bkg_new[i_Break[i]:i_Break[i+1],1] = savgol_filter(st.session_state.Bkg_new[i_Break[i]:i_Break[i+1],1],i_Break[i+1]-i_Break[i]-1,st.session_state.polynom_order_bkg); bkg_new[i_Break[i]] = st.session_state.Bkg_new[i_Break[i]]; bkg_new[i_Break[i+1]] = st.session_state.Bkg_new[i_Break[i+1]]
+                    bkg_new[:i_Break[0],1] = savgol_filter(st.session_state.Bkg_new[:i_Break[0],1],st.session_state.window_bkg,st.session_state.polynom_order_bkg); bkg_new[i_Break[0]] = st.session_state.Bkg_new[i_Break[0]]
+                    bkg_new[i_Break[-1]+1:,1] = savgol_filter(bkg_new[i_Break[-1]+1:,1],15,1)
+                    bkg_mix = st.session_state.Bkg_new.T.tolist()
+                    bkg_mix.append(bkg_new[:,1].tolist())
+                    test_bkg_mix=pd.DataFrame(bkg_mix,index=['Wavenumber', 'Before', 'After']).T.set_index('Wavenumber')
+                    fig_bkg_test = px.line(test_bkg_mix, color_discrete_sequence=['blue','red'])
+                    fig_bkg_test.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg_test.update_xaxes(autorange="reversed")
+                    st.plotly_chart(fig_bkg_test, key='fig_bkg_test_new_smoothed')
+                else :
+                    fig_bkg = px.line(st.session_state.Bkg_new, x=0, y=1)
+                    fig_bkg.update_layout(title_text = 'Background', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_bkg.update_xaxes(autorange="reversed")
+                    st.plotly_chart(fig_bkg, key='fig_bkg_test_new')
      
         spectra_test_selection = st.selectbox('Spectra to use for the test',st.session_state.header_spec.split(',')[1:])      
         idx_selection = [idx for idx in range(len(st.session_state.header_spec.split(','))) if st.session_state.header_spec.split(',')[idx] == spectra_test_selection][0]
@@ -612,7 +638,7 @@ if page == "correction":
             background_window=st.session_state.window_bkg,
             background_polynomial_order=st.session_state.polynom_order_bkg,
         )
-        st.session_state.spectra_test = correct_spectra(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg, 'Wavenumber (cm-1),After', correction_config, n_delta=2)
+        st.session_state.spectra_test = correct_spectra(st.session_state.Spec[:, [0,idx_selection]], st.session_state.Bkg_old, 'Wavenumber (cm-1),After', correction_config, n_delta=2, background_new=st.session_state.get('Bkg_new'))
         st.session_state.spectra_test['Before'] = st.session_state.Spec[:, idx_selection]        
         fig_before = px.line(st.session_state.spectra_test, color_discrete_sequence=['blue','red'])
         fig_before.update_layout(title_text = 'Before vs after break correction', xaxis_title_text="Wavenumber (cm-1)",yaxis_title_text="Amplitude (mV)"); fig_before.update_xaxes(autorange="reversed")
@@ -620,7 +646,7 @@ if page == "correction":
         c11, c12 = st.columns(2)
         with c11 : correct = st.button('Correct the laser break !')
         with c12 : container = st.container()
-        if correct : st.session_state.spectra_corrected = correct_spectra(st.session_state.Spec, st.session_state.Bkg, st.session_state.header_spec, correction_config, n_delta=2)
+        if correct : st.session_state.spectra_corrected = correct_spectra(st.session_state.Spec, st.session_state.Bkg_old, st.session_state.header_spec, correction_config, n_delta=2, background_new=st.session_state.get('Bkg_new'))
         if 'spectra_corrected' in st.session_state :
             with container.form('Save_form') :
                 st.text_input('Enter the file path :', key='savepath')
