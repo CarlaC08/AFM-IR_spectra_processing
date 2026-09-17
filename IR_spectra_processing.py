@@ -949,7 +949,7 @@ if page == "visualisation":
                                     standoff = 2,
                                     clicktoshow="onoff")
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(dots, select_event=True, override_height=height_px)
-            else : plotly_events(dots, False, False, override_height=height_px)       
+            else : st.plotly_chart(dots, width='content')
 
         # No ratio analysis
         else :
