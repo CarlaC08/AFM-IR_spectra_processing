@@ -6,7 +6,7 @@ def initialize_session_state():
     defaults = {
         # Correction tab
         "spectra_files": None,
-        "bkg_files": None,
+        "bkg_files_old": None,
         "breaks_wn_val": [],
         "off_bkg": None,
         "window_bkg": None,

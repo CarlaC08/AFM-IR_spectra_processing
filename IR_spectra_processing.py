@@ -510,7 +510,7 @@ if page == "correction":
             if type_register == 'No' :
                 with c7 : bkg_in_file = st.radio('Is the background in the same file as the spectra ?', ['Yes', 'No'], key='bkg_in_file',index=1)
                 with c8 : organisation = st.radio('Is your file organised with wavenumber in a row or in a column ?', ['Row', 'Column'], key='organisation')        
-                if bkg_in_file =='Yes' : st.session_state.spectra_files = st.file_uploader("Import your file", accept_multiple_files=False, type='csv'); st.session_state.bkg_files = 0
+                if bkg_in_file =='Yes' : st.session_state.spectra_files = st.file_uploader("Import your file", accept_multiple_files=False, type='csv'); st.session_state.bkg_files_old = 0
                 else :
                     c9,c10 = st.columns(2)
                     with c9 : st.session_state.spectra_files = st.file_uploader("Import your IR file", accept_multiple_files=False, type=['csv', 'txt'])
@@ -870,19 +870,23 @@ if page == "visualisation":
             else : img = plot_txtcsv(st.session_state.IR,'hot', st.session_state.map_size, st.session_state.map_unit, st.session_state.map_max, st.session_state.map_min, st.session_state.height_px, st.session_state.width_px, st.session_state.origin, 'IR signal')        
         # Ratio analysis
         if st.session_state.ratio_analysis :
-            # & Savitsky-Golay
             if st.session_state.marker_spectra == False : st.session_state.markers_activated = st.session_state.positions.loc[select_ratio]
             else : st.session_state.markers_activated = st.session_state.positions.loc[st.session_state.to_plot]
             if 'df_toplot' in st.session_state: spectral_axis = st.session_state.df_toplot.index
             else: spectral_axis = st.session_state.spectra.columns
+            # & Savitsky-Golay
             if st.session_state.savgol_operation :
                 ratio_savgol = pd.DataFrame((savgol_filter(st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)], st.session_state.win_len, st.session_state.polyorder, st.session_state.deriv)), index=st.session_state.markers_activated.index, columns=spectral_axis)
                 st.session_state.z = ratio_savgol[st.session_state.wn_1]/ratio_savgol[st.session_state.wn_2]
             else : st.session_state.z = st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_1]/st.session_state.spectra.loc[st.session_state.markers_activated.index.values.astype(int)][st.session_state.wn_2]
-            dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1, marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index,
-                                   hovertemplate= '%{text}', text  = ['Spectrum no. {}: {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values], marker_symbol=st.session_state.markers_activated['marker_style'],
-                                   marker=dict(color = st.session_state.z, colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title=('Ratio '+str(int(st.session_state.wn_1))+'/'+str(int(st.session_state.wn_2))))))
-            for i in annotation_spectrum : dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text=st.session_state.prefix+str(int(i)), name='specrum_'+str(i)) ;dots.update_annotations(selector={'name':f'specrum_{i}'}, axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
+            dots = img.add_scatter(x=st.session_state.markers_activated['X'], y=st.session_state.markers_activated['Y'], mode='markers', marker_size=st.session_state.marker_size, marker_line_width=1,
+                                   marker_line_color='black', uirevision=True, hovertext=st.session_state.markers_activated.index, hovertemplate= '%{text}', text  = ['Spectrum no. {}: {}'.format(int(i), round(st.session_state.z.loc[i],3)) for i in st.session_state.markers_activated.index.values],
+                                   marker_symbol=st.session_state.markers_activated['marker_style'], marker=dict(color = st.session_state.z, colorscale=st.session_state.ratio_cmap, colorbar=dict(x=+1.4, title=('Ratio '+str(int(st.session_state.wn_1))+'/'+str(int(st.session_state.wn_2))))),
+                                   name='positions')
+
+            for i in annotation_spectrum :
+                dots.add_annotation(x=st.session_state.markers_activated.loc[int(i)]['X'], y=st.session_state.markers_activated.loc[int(i)]['Y'], text=st.session_state.prefix+str(int(i)), name='specrum_'+str(i))
+                dots.update_annotations(selector={'name':f'specrum_{i}'},axref='x', ax=st.session_state[f'annotation_{i}_x'], ayref='y', ay=st.session_state[f'annotation_{i}_y'])
             dots.update_layout(hovermode='closest', template=None, font_color='black',yaxis_gridcolor='black', xaxis_gridcolor='black', yaxis_zerolinecolor='black')
             dots.update_annotations(align=st.session_state.horizontal_alignement, arrowcolor=st.session_state.arrow_color, arrowhead = st.session_state.arrow_head,
                                     arrowside = st.session_state.arrow_side,
@@ -905,7 +909,7 @@ if page == "visualisation":
                                     standoff = 2,
                                     clicktoshow="onoff")
             if st.session_state.selection_tool=='Selection on map' : selected_points = plotly_events(dots, select_event=True, override_height=height_px)
-            else : plotly_events(dots, False, False, override_height=height_px)       
+            else : st.plotly_chart(dots, width='content')
     
         # IR analysis
         elif st.session_state.IR_analysis :

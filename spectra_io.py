@@ -28,7 +28,6 @@ def open_series(series_file):
                 )
     raise ValueError(f"Unsupported series data kind: {kind}")
 
-
 def open_spectrum_mirage(path_spectra, path_background, register_type, background_in_file, organisation):
     if register_type == "No":
         if organisation == "Row":
@@ -61,7 +60,6 @@ def open_spectrum_mirage(path_spectra, path_background, register_type, backgroun
     background = background[(background[:, 0] >= 1241) | (background[:, 0] <= 1211)]
     return spectra, background, spectra_header, background_header
 
-
 def open_spectrum_glove_box(path, extension, multiple_file):
     if extension == ["series"]:
         spectra_lines = open_series(path) if not multiple_file else pd.concat([open_series(item) for item in path], axis=1).T.drop_duplicates(keep="first").T
@@ -85,7 +83,6 @@ def open_background_glove_box(path):
         data = _read_csv_lines(spectra_lines, len(spectra_header.split(",")))
     return data[np.argsort(data[:, 0])], spectra_header
 
-
 def _read_csv_lines(lines, column_count):
     data = np.zeros((len(lines) - 1, column_count))
     for row_index, line in enumerate(lines[1:]):
@@ -94,7 +91,6 @@ def _read_csv_lines(lines, column_count):
             if value not in ("\n", "", "\r\n"):
                 data[row_index, column_index] = float(value)
     return data
-
 
 def open_spectrum_nano2(path):
     if ".irb" in path.name:
