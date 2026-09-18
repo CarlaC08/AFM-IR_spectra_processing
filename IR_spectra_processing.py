@@ -109,7 +109,6 @@ try: import pyspc  # from https://github.com/r-hyperspec/pyperspec
 except ImportError: pyspc = None
 # #### AI-ASSISTED BLOCK END
 #%% Variable definitions
-
 initialize_session_state()
 st.session_state.colorscales = [i for j in [[k, k+'_r'] for k in px.colors.named_colorscales()] for i in j]
 symbols_names = ValidatorCache.get_validator("scatter.marker", "symbol").values[2::3]
@@ -142,7 +141,6 @@ if 'baseline_corr' not in st.session_state : st.session_state.baseline_corr = Fa
 # AI intent: guard empty selections so the plotting pipeline behaves safely when no spectra are selected.
 if 'to_plot' not in st.session_state or st.session_state.to_plot is None: st.session_state.to_plot = np.array([], dtype=int)
 # #### AI-ASSISTED BLOCK END
-#%% Correction functions
 #%% Plot functions
 
 @st.cache_data(max_entries=5, show_spinner=False)
@@ -541,16 +539,18 @@ if page == "correction":
             if bkg_new==True :
                 st.session_state.bkg_files_old = c6.file_uploader("Import your OLD background file)", accept_multiple_files=False, type=['series', 'txt', 'csv'], help="Import the background you already divided your spectra with.")
                 st.session_state.bkg_files_new = c6.file_uploader("Import your NEW background file", accept_multiple_files=False, type=['series', 'txt', 'csv'], help="Import the background you want to divide your spectra with.")
-            else : st.session_state.bkg_files_new = c6.file_uploader("Import your background file", accept_multiple_files=False, type=['series', 'txt', 'csv'], help=("Import the background you want to divide your spectra with." if divided==False else "Import the background you already divided your spectra with."))
+            else : st.session_state.bkg_files_old = c6.file_uploader("Import your background file", accept_multiple_files=False, type=['series', 'txt', 'csv'], help=("Import the background you want to divide your spectra with." if divided==False else "Import the background you already divided your spectra with."))
             st.form_submit_button('Submit')
 
     if st.session_state.spectra_files is not None and st.session_state.bkg_files_old is not None:
         st.success("Data imported successfully. Go to the 'Data manipulation' tab.")
     correction_import_tab.__exit__(None, None, None)
     correction_manipulation_tab.__enter__()
-    if (st.session_state.spectra_files==None) or (st.session_state.bkg_files_new==None) or (st.session_state.bkg_files_old==None) : pass
+    if (st.session_state.spectra_files==None) or (st.session_state.bkg_files_old==None) : pass
     else :
-        if system == 'IconIR': st.session_state.Spec, st.session_state.header_spec = open_spectrum_glove_box(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg_old, st.session_state.header_bkg_old = open_background_glove_box(st.session_state.bkg_files_old); st.session_state.Bkg_new, st.session_state.header_bkg_new = open_background_glove_box(st.session_state.bkg_files_new)
+        if system == 'IconIR':
+            st.session_state.Spec, st.session_state.header_spec = open_spectrum_glove_box(st.session_state.spectra_files, extension, multiple_file); st.session_state.Bkg_old, st.session_state.header_bkg_old = open_background_glove_box(st.session_state.bkg_files_old)
+            if 'bkg_files_new' in st.session_state : st.session_state.Bkg_new, st.session_state.header_bkg_new = open_background_glove_box(st.session_state.bkg_files_new)
         elif system == 'Nano IR2': st.session_state.Spec, st.session_state.header_spec = open_spectrum_nano2(st.session_state.spectra_files); st.session_state.Bkg_old, st.session_state.header_bkg_old = open_spectrum_nano2(st.session_state.bkg_files_old)
         elif system == 'Mirage': st.session_state.Spec, st.session_state.Bkg_old, st.session_state.header_spec, st.session_state.header_bkg_old = open_spectrum_mirage(st.session_state.spectra_files, st.session_state.bkg_files_old, st.session_state.type_register, st.session_state.bkg_in_file, st.session_state.organisation)
         if len(st.session_state.Bkg_old)>st.session_state.Spec.shape[0] : st.session_state.Bkg_old = np.array([i for i in st.session_state.Bkg_old if i[0] in st.session_state.Spec[:,0]])
